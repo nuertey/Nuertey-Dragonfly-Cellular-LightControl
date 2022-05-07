@@ -105,14 +105,10 @@ DigitalOut g_UserLED(LED1);
 
 class LEDLightControl
 {   
-    // \" The MSB of the words are sent first. \"     
-    static constexpr uint8_t  DEFAULT_BYTE_ORDER               {0}; // A value of zero indicates MSB-first.
-    static constexpr uint32_t DEFAULT_FREQUENCY           {500000}; // \" SPI max 500 kHz. \"
-    static constexpr uint8_t  MAXIMUM_NUMBER_OF_STARTUP_RETRIES{6};
+    static constexpr uint8_t  MAXIMUM_NUMBER_OF_CONNECT_RETRIES{3};
+    
     static constexpr auto     STARTUP_STATUS_CHECK_DELAY    {10ms};
     static constexpr auto     CHANGE_MEASUREMENT_MODE_DELAY {50ms};
-    
-    static constexpr uint8_t RETRY_COUNT{3};
     
 public:
     LEDLightControl(NetworkInterface * pInterface);
@@ -122,90 +118,149 @@ public:
 
     virtual ~LEDLightControl();
 
+    template <TransportScheme_t transport, TransportSocket_t socket>
+        requires IsValidTransportType<transport, socket>
     [[nodiscard]] bool Connect();
-    std::error_code Send();
-    std::error_code Receive();
+    
+    template <TransportScheme_t transport, TransportSocket_t socket>
+        requires IsValidTransportType<transport, socket>
+    void Run();
         
     void ChangeOperationMode(const IsOperationModeType& mode);
-    
-    void InitiatePeriodicReadings();
-    
-    // Trigger it on sensor interrupt/event queue
-    void AcquireSensorData();
-    
-    // TBD, Nuertey Odzeyem; when????
-    void LowPowerAcquireSensorData();
-    
-    double GetPressure();
-        
-    template <IsTemperatureScaleType T>
-    double GetTemperature();
-    
-    template <IsDirectRegisterAccess R>
-    void WriteToDirectRegister(const uint8_t& value);
-
-    template <IsIndirectRegisterAccess R>
-    void WriteToIndirectRegister(const uint8_t& value);
-    
-    template <IsEEPROMRegisterAccess R>
-    void WriteToEEPROMRegister(const uint8_t& value);
-    
-    // User must specify expected response SPI frame byte width and 
-    // expected class object method return type:
-    template <IsDirectRegisterAccess R, std::size_t M, typename Return_t = uint8_t>
-    Return_t ReadFromDirectRegister();
-
-    template <IsIndirectRegisterAccess R>
-    uint8_t ReadFromIndirectRegister();
-    
-    template <IsEEPROMRegisterAccess R>
-    uint8_t ReadFromEEPROMRegister();
 
 protected:
-    template <std::size_t N, std::size_t M>
-    bool FullDuplexTransfer(const SPIFrame_t<N>& cBuffer, SPIFrame_t<M>& rBuffer);
+    template <TransportScheme_t transport, TransportSocket_t socket>
+        requires IsValidTransportType<transport, socket>
+    [[nodiscard]] bool Send();
+
+    template <TransportScheme_t transport, TransportSocket_t socket>
+        requires IsValidTransportType<transport, socket>
+    [[nodiscard]] bool Receive();
     
-    double ConvertPressure(const uint32_t& sensorData) const;
-    
-    double ConvertTemperature(const int16_t& sensorData) const;    
-    
-    template <IsTemperatureScaleType T>
-    double ConvertTemperature(const int16_t& sensorData) const;
-    
-private:               
-    SPI                                m_TheSPIBus;
-    uint8_t                            m_Mode;
-    uint8_t                            m_ByteOrder;
-    uint8_t                            m_BitsPerWord;
-    uint32_t                           m_Frequency;
-    IsOperationModeType                m_OperationMode;
-    bool                               m_PoweredDownMode;
+private:
+    NetworkInterface *         m_pNetworkInterface;
+    std::optional<std::string> m_EchoServerDomainName; // Domain name might not always necessarily exist...
+    std::string                m_EchoServerAddress;    // However IP Address always would.
+    uint16_t                   m_EchoServerPort;
+    IsOperationModeType        m_OperationMode;
+    bool                       m_IsConnected;
 };
 
 LEDLightControl::LEDLightControl(NetworkInterface * pInterface)
-    : m_TheSPIBus(mosi, miso, sclk, ssel, mbed::use_gpio_ssel)
-    , m_Mode(mode)
-    , m_ByteOrder(byteOrder)
-    , m_BitsPerWord(bitsPerWord)
-    , m_Frequency(frequency)
+    : m_pNetworkInterface(pInterface)
+    , m_EchoServerDomainName(std::nullopt)
+    , m_EchoServerAddress(ECHO_HOSTNAME)
+    , m_EchoServerPort(ECHO_PORT) 
     , m_OperationMode(standbyMode)
-    , m_PoweredDownMode(false)
+    , m_IsConnected(false)
 {
-    // The device runs in SPI mode 0, which requires the clock 
-    // line SCLK to idle low (CPOL = 0), and for data to be sampled on
-    // the leading clock edge (CPHA = 0).
-    
-    // \" Bits from MOSI line are sampled in on the rising edge of SCK
-    // and bits to MISO line are latched out on falling edge of SCK. \"
 
-    // By default, the SPI bus is configured at the Mbed layer with 
-    // format set to 8-bits, mode 0, and a clock frequency of 1MHz.
-    m_TheSPIBus.format(m_BitsPerWord, m_Mode);
-    m_TheSPIBus.frequency(m_Frequency);
 }
 
 LEDLightControl::~LEDLightControl()
 {
+}
+
+template <TransportScheme_t transport, TransportSocket_t socket>
+    requires IsValidTransportType<transport, socket>
+bool LEDLightControl::Connect()
+{    
+    bool result = false;
+    
+    auto [ipAddress, domainName] = Utility::ResolveAddressIfDomainName(m_EchoServerAddress, m_pNetworkInterface);
+    m_EchoServerAddress = ipAddress;
+    
+    if (domainName)
+    {
+        m_EchoServerDomainName = std::move(domainName);
+    }
+
+    printf("\r\nConnecting to : \"%s:%d\" ...", m_EchoServerAddress.c_str(), m_EchoServerPort);
+    nsapi_error_t rc = m_pNetworkInterface.connect();
+    
+    // TBD Nuertey Odzeyem; perform both NetworkInterface->connect() and socket.open() here.
+    
+    
+    if (rc != NSAPI_ERROR_OK)
+    {
+        printf("\r\n\r\nError! NetworkInterface.connect() to EchoServer returned: [%d] -> %s\n", rc, ToString(rc).c_str());
+    }
+    else
+    {   
+        if constexpr (transport == TransportScheme_t::CELLULAR_4G_LTE) 
+        {
+
+        }
+        else if constexpr (transport == TransportScheme_t::ETHERNET)
+        {
+
+        }
+        else
+        {
+            // Mesh Network branch deliberately unimplemented as it is out of scope.
+        }
+    }
+}
+
+template <TransportScheme_t transport, TransportSocket_t socket>
+    requires IsValidTransportType<transport, socket>
+void LEDLightControl::Run()
+{
+    while (true)
+    {
+        if (Send<transport, socket>())
+        {
+            if (Receive<transport, socket>())
+            {
+                // Update LED here?
+                continue;
+            }
+            else
+            {
+                break;
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
+}
+
+template <TransportScheme_t transport, TransportSocket_t socket>
+    requires IsValidTransportType<transport, socket>
+bool LEDLightControl::Send()
+{
+    if constexpr (transport == TransportScheme_t::CELLULAR_4G_LTE) 
+    {
+
+    }
+    else if constexpr (transport == TransportScheme_t::ETHERNET)
+    {
+
+    }
+    else
+    {
+        // Mesh Network branch deliberately unimplemented as it is out of scope.
+    }
+}
+
+template <TransportScheme_t transport, TransportSocket_t socket>
+    requires IsValidTransportType<transport, socket>
+bool LEDLightControl::Receive()
+{
+    if constexpr (transport == TransportScheme_t::CELLULAR_4G_LTE) 
+    {
+
+    }
+    else if constexpr (transport == TransportScheme_t::ETHERNET)
+    {
+
+    }
+    else
+    {
+        // Mesh Network branch deliberately unimplemented as it is out of scope.
+    }
 }
 
 void LEDLightControl::ChangeOperationMode(const IsOperationModeType& mode)
@@ -311,187 +366,4 @@ void LEDLightControl::AcquireSensorData()
         printf("Barometric pressure:\n\t->%s Pa\n\n", 
             TruncateAndToString<double>(GetPressure()).c_str());
     }
-}
-
-void LEDLightControl::LowPowerAcquireSensorData()
-{
-    // \" In low power mode SCP1000 measures pressure and temperature
-    // once after the measurement is triggered. \"
-    if (m_OperationMode == lowPowerMeasurementWithExternalTriggerMode)
-    {
-    }
-}
-
-template <std::size_t N, std::size_t M>
-bool LEDLightControl::FullDuplexTransfer(const SPIFrame_t<N>& cBuffer,
-                                                    SPIFrame_t<M>& rBuffer)
-{   
-    bool result{true};
-    
-    // Do not presume that the users of this OS-abstraction are well-behaved.
-    rBuffer.fill(0);
-
-    // Assert the Slave Select line, acquiring exclusive access to the
-    // SPI bus. Chip select is active low hence cs = 0 here. Note that
-    // write already internally mutex locks and selects the SPI bus.
-    //m_TheSPIBus.select();
-    
-    // Write to the SPI Slave and obtain the response.
-    //
-    // The total number of bytes sent and received will be the maximum
-    // of tx_length and rx_length. The bytes written will be padded with
-    // the value 0xff. Further note that the number of bytes to either
-    // write or read, may be zero, without raising any exceptions.
-    std::size_t bytesWritten = m_TheSPIBus.write(reinterpret_cast<const char*>(cBuffer.data()),
-                                                 cBuffer.size(),
-                                                 reinterpret_cast<char*>(rBuffer.data()), 
-                                                 rBuffer.size());
-    
-    // Deassert the Slave Select line, releasing exclusive access to the
-    // SPI bus. Chip select is active low hence cs = 1 here.  Note that
-    // write already internally deselects and mutex unlocks the SPI bus.
-    //m_TheSPIBus.deselect();   
-    
-    if (bytesWritten != std::max(cBuffer.size(), rBuffer.size()))
-    {
-        printf("%s: Error! SPI Command Frame - Incorrect number of bytes \
-            transmitted\n",
-            __PRETTY_FUNCTION__);
-        result = false;
-        
-        // Enabled to facilitate runtime debugging:
-        DisplayFrame(cBuffer);
-        DisplayFrame(rBuffer);
-    } 
-    
-    return result;
-}
-
-template <IsDirectRegisterAccess R>
-void LEDLightControl::WriteToDirectRegister(const uint8_t& value)
-{   
-    // \" Each SPI communication frame contains two or three 8 bit words:
-    // the first word defines the register address (6 bits wide, bits
-    // [A5:A0] in Figure 9) followed by the type of access (‘0’ = Read 
-    // or ‘1’ = Write) and one zero bit (bit 0, LSB). \"
-    uint8_t firstWord = (R << 2) | RegisterAccess_t::SPI_WRITE;
-    
-    SPIFrame_t commandFrame{firstWord, value};
-    SPIFrame_t dummyResponse = {}; // Initialize to zeros.
-
-    // \" The CSB line must stay low during the entire frame accesses, 
-    // i.e. between the bytes. If the CSB line state changes to high, 
-    // the access is terminated. The CSB has to be pulled up after each
-    // communication frame. \"    
-    auto status = FullDuplexTransfer<2, 2>(commandFrame, dummyResponse);
-    
-    if (!status)
-    {
-        printf("[%s]: Error! Failed to write direct register value. \
-            \n\tRegister Address := [%s]\n\tValue := [%s]\n",
-            __PRETTY_FUNCTION__, 
-            IntegerToHex(R).c_str(), 
-            IntegerToHex(value).c_str());
-    }
-}
-
-template <IsIndirectRegisterAccess R>
-void LEDLightControl::WriteToIndirectRegister(const uint8_t& value)
-{
-    // Write the indirect register address into direct register ADDPTR (0x02).
-    WriteToDirectRegister<RegisterAddress_t::INDIRECT_REGISTER_ACCESS_ADDRESS_POINTER>(R);
-    
-    // Write the value into direct register DATAWR (0x01).
-    WriteToDirectRegister<RegisterAddress_t::INDIRECT_REGISTER_ACCESS_DATA>(value);
-    
-    // Write 0x02 into direct register OPERATION (0x03). Essentially 
-    // effecting:
-    //
-    // \" Write DATAWR contents into the indirect access register 
-    // pointed to by ADDPTR. \"
-    WriteToDirectRegister<RegisterAddress_t::OPERATION>(Operation_t::WRITE_INDIRECT_REGISTER_ACCESS_DATA);
-    
-    // \" Wait 50 ms. \"
-    ThisThread::sleep_for(50ms);
-}
-
-template <IsEEPROMRegisterAccess R>
-void LEDLightControl::WriteToEEPROMRegister(const uint8_t& value)
-{
-    // \" 3.4.1 EEPROM writing
-    //
-    // Please note that in order to guarantee reliable EEPROM writing
-    // operation it is very critical to follow the requirements below.
-    // The minimum value for supply voltage at +25 °C temperature is
-    // 3.0 V during EEPROM register write operation. The peak current
-    // consumption is also significantly higher than in normal operation
-    // (~2 mA for 15 ms period per byte). \"
-    
-    // Write the EEPROM register address into direct register ADDPTR (0x02).
-    WriteToDirectRegister<RegisterAddress_t::INDIRECT_REGISTER_ACCESS_ADDRESS_POINTER>(R);
-    
-    // Write the value into direct register DATAWR (0x01).
-    WriteToDirectRegister<RegisterAddress_t::INDIRECT_REGISTER_ACCESS_DATA>(value);
-    
-    // Write 0x06 into direct register OPERATION (0x03). Essentially 
-    // effecting:
-    //
-    // \" Write DATAWR contents into the EEPROM register pointed by
-    // ADDPTR. \"
-    WriteToDirectRegister<RegisterAddress_t::OPERATION>(Operation_t::WRITE_EEPROM_REGISTER_DATA);
-    
-    // \" Wait 50 ms. \"
-    ThisThread::sleep_for(50ms);
-}
-
-template <IsDirectRegisterAccess R, std::size_t M, typename Return_t = uint8_t>
-Return_t LEDLightControl::ReadFromDirectRegister()
-{
-    Return_t result{0};
-           
-    // \" Each SPI communication frame contains two or three 8 bit words:
-    // the first word defines the register address (6 bits wide, bits
-    // [A5:A0] in Figure 9) followed by the type of access (‘0’ = Read 
-    // or ‘1’ = Write) and one zero bit (bit 0, LSB). \"
-    uint8_t firstWord = (R << 2) | RegisterAccess_t::SPI_READ;
-    
-    SPIFrame_t<1> commandFrame{firstWord};
-    SPIFrame_t<M> responseFrame = {}; // Initialize to zeros.
-
-    // \" The CSB line must stay low during the entire frame accesses, 
-    // i.e. between the bytes. If the CSB line state changes to high, 
-    // the access is terminated. The CSB has to be pulled up after each
-    // communication frame. \"    
-    auto status = FullDuplexTransfer<1, M>(commandFrame, responseFrame);
-    
-    if (!status)
-    {
-        printf("[%s]: Error! Failed to read from direct register address. \
-            \n\tRegister Address := [%s]\n\tM := [%s]\n",
-            __PRETTY_FUNCTION__, 
-            IntegerToHex(R).c_str(), 
-            IntegerToDec(M).c_str());
-    }
-    
-    if constexpr (std::is_same_v<Return_t, uint8_t>)
-    {
-        if constexpr (M == 1)
-        {
-            // \" ... the register content is in bits [7:0], see section 3.2
-            // for further information. \"
-            result = responseFrame.at(0);
-        }
-        else if constexpr (M == 2)
-        {
-            // \" ... bits [15:8] should be treated as zeros, the register 
-            // content is in bits [7:0], see section 3.2 for further information. \"
-            result = responseFrame.at(1);
-        }
-    }
-    else if constexpr (std::is_same_v<Return_t, uint16_t>)
-    {
-        result = Deserialize(responseFrame);
-    }
-    
-    return result;
 }

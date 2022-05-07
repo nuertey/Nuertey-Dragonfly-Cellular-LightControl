@@ -97,7 +97,6 @@ constexpr auto ToEnum(V value) -> E
 namespace Utilities
 {
     extern PlatformMutex                    g_STDIOMutex;
-    extern EthernetInterface                g_EthernetInterface;
 
     void NetworkStatusCallback(nsapi_event_t status, intptr_t param);
 
@@ -205,7 +204,7 @@ namespace Utilities
     // Be careful about designating the return here as const. It will
     // trap you in some sneaky behavior as a move from the std::optional
     // will rather invoke the copy constructor without the compiler complaining.
-    const auto ResolveAddressIfDomainName = [](const std::string & address)
+    const auto ResolveAddressIfDomainName = [](const std::string & address, NetworkInterface * pInterface)
     {
         std::optional<std::string> domainName(std::nullopt);
         std::string ipAddress = address;
@@ -222,14 +221,13 @@ namespace Utilities
                 do
                 {
                     printf("\r\nPerforming DNS lookup for : \"%s\" ...", address.c_str());
-                    retVal = g_EthernetInterface.gethostbyname(address.c_str(), &serverSocketAddress);
+                    retVal = pInterface->gethostbyname(address.c_str(), &serverSocketAddress);
                     if (retVal < 0)
                     {
                         printf("\r\nError! On DNS lookup, Network returned: [%d] -> %s", retVal, ToString(retVal).c_str());
                     }
                 }  while (retVal < 0);
 
-                //g_EthernetInterface.get_ip_address(&serverSocketAddress);
                 ipAddress = std::string(serverSocketAddress.get_ip_address());
             }
         }

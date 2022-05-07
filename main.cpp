@@ -1,119 +1,41 @@
 /***********************************************************************
 * @file      main.cpp
 *
-*    Illustrating how the ARM Mbed Baremetal profile can be used to 
-*    control several LEDs concurrently (even though threading is not
-*    supported).
-* 
-*    Functionally, this application continuously blinks 3 10mm external 
-*    LEDs connected to various I/O ports at different frequencies, whilst
-*    employing PWM output pins to vary the intensity of yet another 3 10mm
-*    LEDs according to:
-* 
-*    [1] An on-the-fly calculated sawtooth waveform pattern,
-* 
-*    [2] A precomputed triangular waveform pattern,
-* 
-*    [3] And a precomputed sinusoidal waveform pattern.
-*    
-*    Essentially, the values of said waveforms are scaled and used as the
-*    duty cycle in driving, dimming, and brightening of the latter 3 10mm
-*    LEDs.
+*    ARM Mbed application that blinks LED1 (D3, PA_0) on MultiTech 
+*    Dragonfly Nano development board by sending and receiving 4G LTE 
+*    Cellular LightControl messages.
 *
 * @brief   Input: None
-*          Output: Various LED patterns of continuously changing intensity.
+*          Output: LED1 begins to blink, continuously, once 4G LTE 
+*                  connection is established and messages begin to flow.
 * 
-* @note    Bare metal is a profile of ARM Mbed OS for ultraconstrained 
-*          devices; compact and without an RTOS. It builds only the smallest
-*          set of APIs that applications require - driver APIs, platform
-*          APIs and a subset of the RTOS APIs. This gives one better control
-*          of the application's final size.
+* @note    
+* 
+*   Dragonfly Nano Key Benefits
+* 
+*   End device certified by leading carriers
+*   Low power modes extend life of battery powered devices
+*   Extended coverage means assets deep inside buildings are now reachable
+*   Long solution lifecycle reduces redesign time and cost
+*   LTE, Cat M1 
+* 
+*   Dragonfly Nano Features
 *
-* @warning   The I/O pins of the STM32 NUCLEO-F767ZI are 3.3 V compatible 
-*            instead of 5 V for say, the Arduino Uno V3 microcontroller.
-*            Hence values for current-limiting resistors placed in series
-*            with the external 10mm LEDs must be adjusted accordingly.
-* 
-*            Furthermore, the STM32 GPIO pins are not numbered 1-64; rather, 
-*            they are named after the MCU IO port that they are controlled
-*            by. Hence PA_5 is pin 5 on port A. This means that physical
-*            pin location may not be related to the pin name. Consult 
-*            the "Extension connectors" sub-chapter of the "Hardware 
-*            layout and configuration" chapter of the STM32 Nucleo-144 
-*            boards UM1974 User manual (en.DM00244518.pdf) to know where
-*            each pin is located. Note that all those pins shown can be 
-*            used as GPIOs, however most of them also have alternative 
-*            functions which are indicated on those diagrams.
+*   3GPP Release 13 Extended Discontinuous Reception (eDRX)
+*   3GPP Release 13 Extended Coverage
+*   3GPP Release 12 Power Saving Mode (PSM)
+*   Arm® Mbed™ OS enabled
+*   Multiple I/O interfaces for connecting almost any “Thing” 
+*
+* @warning   
 *
 * @author    Nuertey Odzeyem
 * 
-* @date      June 17th, 2021
+* @date      May 7th, 2022
 *
-* @copyright Copyright (c) 2021 Nuertey Odzeyem. All Rights Reserved.
+* @copyright Copyright (c) 2022 Nuertey Odzeyem. All Rights Reserved.
 ***********************************************************************/
-#include "mbed.h"
-#include "mbed_events.h"
-#include <stdio.h>
-
-// Primary usecase:
-#define MTS_DRAGONFLY_L471QG 
-// To allow for potential debug testing on the only MCU that I do have available:
-//#define NUCLEO-F767ZI
-
-// TBD Nuertey Odzeyem; confirm if the below holds for both MTS_DRAGONFLY_L471QG and the NUCLEO-F767ZI targets.
-#define LED_ON  1
-#define LED_OFF 0
-
-// Choice of socket type configuration parsed from mbed_app.json:
-#define UDP 0
-#define TCP 1
-#define NONIP 2
-
-enum class TransportScheme_t : uint8_t
-{
-    CELLULAR_4G_LTE,          // Primary usecase for MTS_DRAGONFLY_L471QG target (LTE Cat M1 Cellular).
-    ETHERNET,                 // To potentially allow for debug testing on my available NUCLEO-F767ZI target.  
-    MESH_NETWORK_6LoWPAN-ND,  // Design room for future enhancements.
-    MESH_NETWORK_Wi-SUNMODE_4 // Design room for future enhancements.
-};
-
-enum class TransportSocket_t : uint8_t
-{
-    TCP,
-    UDP,
-    CELLULAR_NON_IP
-};
-
-#if MBED_CONF_APP_SOCK_TYPE == TCP
-    static constexpr char SOCKET_TYPE[] = "TCP";
-#elif MBED_CONF_APP_SOCK_TYPE == UDP
-    static constexpr char SOCKET_TYPE[] = "UDP";
-#elif MBED_CONF_APP_SOCK_TYPE == NONIP
-    static constexpr char SOCKET_TYPE[] = "CellularNonIP";
-#endif
-
-static const char ECHO_HOSTNAME[] = MBED_CONF_APP_ECHO_SERVER_HOSTNAME;
-// Echo server hostname
-const char *host_name = MBED_CONF_APP_ECHO_SERVER_HOSTNAME;
-
-// Echo server port (same for TCP and UDP)
-const int port = MBED_CONF_APP_ECHO_SERVER_PORT;
-
-using namespace std::chrono_literals;
-
-static constexpr auto LED_BLINKING_RATE = 500ms;
-
-// Per both potential MCU specs, common LED 'in situ' on the MCU:        
-// Target = MTS_DRAGONFLY_L471QG: UNO pin D3 (i.e. STM32 pin PA_0).
-// Target = NUCLEO-F767ZI: Green LED
-DigitalOut g_UserLED(LED1);
-
-#ifdef MTS_DRAGONFLY_L471QG
-
-#elseif NUCLEO-F767ZI
-
-#endif
-
+#include "LEDLightControl.h"
 
 
 

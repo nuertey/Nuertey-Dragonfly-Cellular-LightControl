@@ -35,6 +35,7 @@
             "platform.stdio-buffered-serial": true,
             "cellular.debug-at": true,
             "cellular.use-apn-lookup": true,
+            "cellular.radio-access-technology": 8,
             "nsapi.default-cellular-sim-pin": null,
             "nsapi.default-cellular-plmn": null,
             "nsapi.default-cellular-apn":  "\"vzwinternet\"",

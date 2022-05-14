@@ -31,6 +31,14 @@
 #include "mbed.h"
 #include "mbed_events.h"
 #include "randLIB.h"
+
+//#include "common_functions.h"
+#include "CellularNonIPSocket.h"
+#include "UDPSocket.h"
+#include "TCPSocket.h"
+#include "CellularDevice.h"
+#include "cellular_demo_tracing.h"
+
 #include "Utilities.h"
 
 // Primary usecase:
@@ -138,12 +146,23 @@ protected:
     [[nodiscard]] bool Receive();
     
 private:
-    NetworkInterface *         m_pNetworkInterface;
-    std::optional<std::string> m_EchoServerDomainName; // Domain name might not always necessarily exist...
-    std::string                m_EchoServerAddress;    // However IP Address always would.
-    uint16_t                   m_EchoServerPort;
-    IsOperationModeType        m_OperationMode;
-    bool                       m_IsConnected;
+    NetworkInterface *             m_pNetworkInterface;
+    std::optional<std::string>     m_EchoServerDomainName; // Domain name might not always necessarily exist...
+    std::string                    m_EchoServerAddress;    // However IP Address always would.
+    uint16_t                       m_EchoServerPort;
+    IsOperationModeType            m_OperationMode;
+    bool                           m_IsConnected;
+    
+    // Conditional class members based upon configuration parsed from mbed_app.json:
+    #if MBED_CONF_APP_SOCK_TYPE == TCP
+        TCPSocket                  m_TheSocket;
+        SocketAddress              m_TheSocketAddress;
+    #elif MBED_CONF_APP_SOCK_TYPE == UDP
+        UDPSocket                  m_TheSocket;
+        SocketAddress              m_TheSocketAddress;
+    #elif MBED_CONF_APP_SOCK_TYPE == NONIP
+        CellularNonIPSocket        m_TheSocket;
+    #endif
 };
 
 LEDLightControl::LEDLightControl(NetworkInterface * pInterface)

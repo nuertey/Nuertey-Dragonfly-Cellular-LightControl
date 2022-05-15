@@ -111,6 +111,10 @@ DigitalOut g_UserLED(LED1);
 // ensure our output does not come out garbled on the serial terminal.
 PlatformMutex g_STDIOMutex; 
 
+// Do NOT use std::unique_ptr<> as we must NOT delete the shared
+// event queue pointer (a singleton) at any time.       
+EventQueue * g_pSharedEventQueue;
+
 // Here is the 'old-school way' of detecting (and changing behaviors based upon)
 // target type. My goal is to rather prefer elegant C++20 Concepts via the User's
 // own-specified template parameters in the Application (main.cpp) and whichever
@@ -282,7 +286,8 @@ void LEDLightControl::Setup()
     // virtual void cellular_callback(nsapi_event_t ev, intptr_t ptr, CellularContext *ctx = NULL);
     
     
-
+    // LEDLightControl::Connect() should happen here and should be called by the class itself
+    // hence private or protected member:
 }
 
 void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t parameterPointerData)
@@ -302,6 +307,20 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
             printf("Global IP address set!\r\n");
             m_IsConnected = true;
             g_STDIOMutex.unlock();
+            
+            // Post the asynchronously notified network status change on the shared event
+            // queue so that its actions can be scheduled and complete in synchronous
+            // thread mode instead of in interrupt (callback) mode.
+            auto event1 = make_user_allocated_event(this, &LEDLightControl::Run);
+        
+            // bind & post
+            event1.call_on(g_pSharedEventQueue);
+            
+            // Note that the EventQueue has no concept of event priority. 
+            // If you schedule events to run at the same time, the order in
+            // which the events run relative to one another is undefined. 
+            // The EventQueue only schedules events based on time.
+            
             break;
         case NSAPI_STATUS_DISCONNECTED:
             printf("Socket disconnected from network!\r\n");
@@ -354,6 +373,22 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
                     // {
                     //     _state_machine->set_plmn(_plmn);
                     // }
+
+                    // TBD Nuertey Odzeyem; should it be like this in this state of the Cellular state machine? 
+                    // Confirm with testing...:
+                    //
+                    // Post the asynchronously notified network status change on the shared event
+                    // queue so that its actions can be scheduled and complete in synchronous
+                    // thread mode instead of in interrupt (callback) mode.
+                    auto event1 = make_user_allocated_event(this, &LEDLightControl::Run);
+                
+                    // bind & post
+                    event1.call_on(g_pSharedEventQueue);
+                    
+                    // Note that the EventQueue has no concept of event priority. 
+                    // If you schedule events to run at the same time, the order in
+                    // which the events run relative to one another is undefined. 
+                    // The EventQueue only schedules events based on time.
                 }
                 else if (cellEvent == CellularSIMStatusChanged && ptr_data->error == NSAPI_ERROR_OK &&
                          ptr_data->status_data == CellularSIM::SimStatePinNeeded)
@@ -406,6 +441,16 @@ bool LEDLightControl::Connect()
         {
             // Mesh Network branch deliberately unimplemented as it is out of scope.
         }
+    }
+    
+    
+    // Setup complete, so we now dispatch the shared event queue forever:
+    
+    // We will never return from the call below, as events are executed by 
+    // the dispatch_forever method.
+    if (g_pSharedEventQueue)
+    {
+        g_pSharedEventQueue->dispatch_forever();
     }
 }
 

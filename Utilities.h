@@ -96,10 +96,6 @@ constexpr auto ToEnum(V value) -> E
     
 namespace Utilities
 {
-    extern PlatformMutex                    g_STDIOMutex;
-
-    void NetworkStatusCallback(nsapi_event_t status, intptr_t param);
-
     // This custom clock type obtains the time from RTC too whilst noting the Processor speed.
     struct NucleoF767ZIClock_t
     {

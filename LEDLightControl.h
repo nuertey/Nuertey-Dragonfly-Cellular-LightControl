@@ -149,10 +149,6 @@ public:
     void Setup();
     
     void NetworkStatusCallback(nsapi_event_t status, intptr_t param);
-
-    template <TransportScheme_t transport, TransportSocket_t socket>
-        requires IsValidTransportType<transport, socket>
-    [[nodiscard]] bool Connect();
     
     template <TransportScheme_t transport, TransportSocket_t socket>
         requires IsValidTransportType<transport, socket>
@@ -161,6 +157,10 @@ public:
     void ChangeOperationMode(const IsOperationModeType& mode);
 
 protected:
+    template <TransportScheme_t transport, TransportSocket_t socket>
+        requires IsValidTransportType<transport, socket>
+    void Connect();
+
     template <TransportScheme_t transport, TransportSocket_t socket>
         requires IsValidTransportType<transport, socket>
     [[nodiscard]] bool Send();
@@ -266,7 +266,7 @@ void LEDLightControl::Setup()
         //
         // m_pNetworkInterface = MeshInterface::get_default_instance();
          static_assert(((transport == TransportScheme_t::CELLULAR_4G_LTE) || (transport == TransportScheme_t::ETHERNET)), 
-             "Hey! Mesh Network branch deliberately unimplemented as it is out of scope!!!");
+             "Hey! Mesh Network branch DELIBERATELY unimplemented as it is out of scope!!!");
     }
     
     // Asynchronously monitor for Network Status events:
@@ -288,10 +288,14 @@ void LEDLightControl::Setup()
     
     // LEDLightControl::Connect() should happen here and should be called by the class itself
     // hence private or protected member:
+    Connect<transport, socket>();
 }
 
 void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t parameterPointerData)
 {
+    // TBD Nuertey Odzeyem; verify with testing whether this assertion 
+    // is needed, and if it is here, will it negatively affect the "workings"
+    // of the Cellular network.
     //assert(statusEvent == NSAPI_EVENT_CONNECTION_STATUS_CHANGE);
 
     g_STDIOMutex.lock();
@@ -310,7 +314,7 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
             
             // Post the asynchronously notified network status change on the shared event
             // queue so that its actions can be scheduled and complete in synchronous
-            // thread mode instead of in interrupt (callback) mode.
+            // thread mode instead of in interrupt (i.e. callback) mode.
             auto event1 = make_user_allocated_event(this, &LEDLightControl::Run);
         
             // bind & post
@@ -330,7 +334,7 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
             tr_debug("Network Status Event Callback: %d, \t\r\nparameterPointerData: %d", \
                 statusEvent, parameterPointerData);
                 
-            if (statusEvent == NSAPI_EVENT_CONNECTION_STATUS_CHANGE && parameterPointerData == NSAPI_STATUS_DISCONNECTED)
+            if (statusEvent == NSAPI_EVENT_CONNECTION_STATUS_CHANGE) //&& parameterPointerData == NSAPI_STATUS_DISCONNECTED)
             {
                 // we have been disconnected, reset state machine so that application can start connect sequence again
                 // if (_state_machine)
@@ -376,6 +380,7 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
 
                     // TBD Nuertey Odzeyem; should it be like this in this state of the Cellular state machine? 
                     // Confirm with testing...:
+                    m_IsConnected = true;
                     //
                     // Post the asynchronously notified network status change on the shared event
                     // queue so that its actions can be scheduled and complete in synchronous
@@ -405,10 +410,78 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
 
 template <TransportScheme_t transport, TransportSocket_t socket>
     requires IsValidTransportType<transport, socket>
-bool LEDLightControl::Connect()
-{    
-    bool result = false;
+void LEDLightControl::Connect()
+{
+    // "Asynchronous operation
+    // 
+    // NetworkInterface::connect() and NetworkInterface::disconnect() are blocking
+    // by default. When an application prefers asynchronous operation, it can set
+    // the interface into nonblocking mode by calling NetworkInterface::set_blocking(false).
+    // This has to be done for each interface separately.
+    // 
+    // When an interface operates in asynchronous mode, the return values of connect()
+    // and disconnect() have slightly different meanings. Calling connect() starts the
+    // asynchronous operation, which puts the device in the GLOBAL_UP state. Calling
+    // disconnect() puts the target in the DISCONNECTED state. Return code in 
+    // asynchronous mode does not reflect the connection status. The most common 
+    // return codes in asynchronous mode is NSAPI_ERROR_OK, which means that operation
+    // just started. Please refer to the Doxygen documentation of NetworkInterface::connect()
+    // and NetworkInterface::disconnect() for return values of these functions.
+    // 
+    // To check whether the interface is connected, the application needs to register 
+    // the status callback for the interface. Please refer to the Network status API
+    // for information on how to do so."
+    //
+    // https://os.mbed.com/docs/mbed-os/v6.15/apis/network-interface.html
+    m_pNetworkInterface->set_blocking(false);
+    [[maybe_unused]] auto asynchronous_connect_return_perhaps_can_be_safely_ignored \
+                                           = m_pNetworkInterface->connect();
+      
+    // Setup complete, so we can now dispatch the shared event queue forever:
     
+    // We will never return from the call below, as events are executed by 
+    // the dispatch_forever method.
+    if (g_pSharedEventQueue)
+    {
+        g_pSharedEventQueue->dispatch_forever();
+    }
+    else
+    {
+        assert(((void)"Such a thing ought to never happen but unfortunately (whom knows why?), g_pSharedEventQueue is nullptr!!", \
+            (g_pSharedEventQueue != nullptr)));
+    }
+}
+
+template <TransportScheme_t transport, TransportSocket_t socket>
+    requires IsValidTransportType<transport, socket>
+void LEDLightControl::Run()
+{
+    // Show the particular NetworkInterface addresses to encourage Debug. 
+    // Don't forget that this class object is being designed to handle 
+    // several NetworkInterfaces--primarily Cellular, yes?, but also Ethernet
+    // to aid debug and testing, and can even be extended in the future 
+    // for Mesh Networks... as already documented in the above preliminaries: 
+    const char *ip = m_pNetworkInterface->get_ip_address();
+    const char *netmask = m_pNetworkInterface->get_netmask();
+    const char *gateway = m_pNetworkInterface->get_gateway();
+    const char *mac = m_pNetworkInterface->get_mac_address();
+    
+    printf("Particular Network Interface IP address: %s\n", ip ? ip : "None");
+    printf("Particular Network Interface Netmask: %s\n", netmask ? netmask : "None");
+    printf("Particular Network Interface Gateway: %s\n", gateway ? gateway : "None");
+    printf("Particular Network Interface MAC Address: %s\n", mac ? mac : "None");
+    
+    // TBD Nuertey Odzeyem; perhaps print Cellular statistics here too?
+    // CellularContext *ctx  = cellularDevice->create_context();
+    // if (ctx)
+    // {
+    //  if (ctx->connect() == NSAPI_ERROR_OK)
+    //  {
+    //      printf("Local IP address is %s", ctx->get_ip_address());
+    //  }
+    // }
+    
+    // TBD Nuertey Odzeyem; resolve hostname here??? ...
     auto [ipAddress, domainName] = Utility::ResolveAddressIfDomainName(m_EchoServerAddress, m_pNetworkInterface);
     m_EchoServerAddress = ipAddress;
     
@@ -418,46 +491,40 @@ bool LEDLightControl::Connect()
     }
 
     printf("\r\nConnecting to : \"%s:%d\" ...", m_EchoServerAddress.c_str(), m_EchoServerPort);
-    nsapi_error_t rc = m_pNetworkInterface.connect();
+    // nsapi_error_t rc = m_pNetworkInterface.connect();
+    // 
+    // if (rc != NSAPI_ERROR_OK)
+    // {
+    //     printf("\r\n\r\nError! NetworkInterface.connect() to EchoServer returned: [%d] -> %s\n", rc, ToString(rc).c_str());
+    // }
+    // else
+    // {   
+    //     if constexpr (transport == TransportScheme_t::CELLULAR_4G_LTE) 
+    //     {
+    // 
+    //     }
+    //     else if constexpr (transport == TransportScheme_t::ETHERNET)
+    //     {
+    // 
+    //     }
+    //     else
+    //     {
+    //         // Mesh Network branch deliberately unimplemented as it is out of scope.
+    //     }
+    // }
     
-    // TBD Nuertey Odzeyem; perform both NetworkInterface->connect() and socket.open() here.
+    // "Open a socket on the network interface, and create a TCP connection to mbed.org..."
+    // // TBD Nuertey Odzeyem; perform socket.open() and connect() here???? Do so if it seems logical....
+    // 
+    // 
     
+    // /**
+    //  * For UDP or TCP it opens a socket with the given echo server and performs an echo transaction.
+    //  * For Cellular Non-IP it opens a socket for which the data delivery path is decided
+    //  * by network's control plane CIoT optimisation setup, for the given APN.
+    //  */
+    // bool test_send_and_receive()
     
-    if (rc != NSAPI_ERROR_OK)
-    {
-        printf("\r\n\r\nError! NetworkInterface.connect() to EchoServer returned: [%d] -> %s\n", rc, ToString(rc).c_str());
-    }
-    else
-    {   
-        if constexpr (transport == TransportScheme_t::CELLULAR_4G_LTE) 
-        {
-
-        }
-        else if constexpr (transport == TransportScheme_t::ETHERNET)
-        {
-
-        }
-        else
-        {
-            // Mesh Network branch deliberately unimplemented as it is out of scope.
-        }
-    }
-    
-    
-    // Setup complete, so we now dispatch the shared event queue forever:
-    
-    // We will never return from the call below, as events are executed by 
-    // the dispatch_forever method.
-    if (g_pSharedEventQueue)
-    {
-        g_pSharedEventQueue->dispatch_forever();
-    }
-}
-
-template <TransportScheme_t transport, TransportSocket_t socket>
-    requires IsValidTransportType<transport, socket>
-void LEDLightControl::Run()
-{
     while (true)
     {
         if (Send<transport, socket>())

@@ -63,6 +63,19 @@
 ***********************************************************************/
 #include "LEDLightControl.h"
 
+// TBD Nuertey Odzeyem; make these potential two defines below reflect the
+// actual contents of the configuration options defined in the mbed_app.json:
+
+// Primary usecase:
+//#define MTS_DRAGONFLY_L471QG 
+
+// To allow for potential debug testing on the only MCU that I do have available:
+#define NUCLEO_F767ZI
+
+// Do NOT use std::unique_ptr<> as we must NOT delete the shared
+// event queue pointer (a singleton) at any time.       
+LEDLightControl * g_pLEDLightControl;
+
 int main()
 {
     printf("\r\n\r\nNuertey-Dragonfly-Cellular-LightControl Application - Beginning... \r\n\r\n");
@@ -74,8 +87,27 @@ int main()
     printf("\n\n[MAIN], CELLULAR_PLMN: %s\n", (MBED_CONF_NSAPI_DEFAULT_CELLULAR_PLMN ? MBED_CONF_NSAPI_DEFAULT_CELLULAR_PLMN : "NULL"));
 #endif
 
+    // Note that the MBED_ASSERT macro is only available in the Debug 
+    // and Development build profiles and not in the Release build profile. 
+    MBED_ASSERT(g_pLEDLightControl);
 
-
+    // Here is the 'old-school way' of detecting (and changing behaviors based upon)
+    // target type. My goal is to rather prefer (from hereon) elegant C++20 Concepts via the User's
+    // own-specified template parameters in the Application (main.cpp) and whichever
+    // intrinsic configurations were already parsed from the mbed_app.json that the 
+    // User(s) themselves have already specified. Naturally and logically, the mbed_app.json
+    // version will change based upon whether the to-be-tested target is MTS_DRAGONFLY_L471QG or
+    // NUCLEO_F767ZI. My NUCLEO_F767ZI of course lacking the cellular shield.
+#ifdef MTS_DRAGONFLY_L471QG
+    // This call will never return as it encapsulates an EventQueue's
+    // ::dispatch_forever() method.
+    g_pLEDLightControl->Setup<TransportScheme_t::CELLULAR_4G_LTE, TransportSocket_t::TCP>();
+#elseif NUCLEO_F767ZI
+    // This call will never return as it encapsulates an EventQueue's
+    // ::dispatch_forever() method.
+    g_pLEDLightControl->Setup<TransportScheme_t::ETHERNET, TransportSocket_t::TCP>();
+#endif
+     
     // As per design, we will NEVER get to this statement. Great! Helps with debug...
     printf("\r\n\r\nNuertey-Dragonfly-Cellular-LightControl Application - Exiting.\r\n\r\n");
 }

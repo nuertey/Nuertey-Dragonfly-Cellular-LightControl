@@ -42,12 +42,6 @@
 
 #include "Utilities.h"
 
-// Primary usecase:
-#define MTS_DRAGONFLY_L471QG 
-
-// To allow for potential debug testing on the only MCU that I do have available:
-//#define NUCLEO_F767ZI
-
 // TBD Nuertey Odzeyem; confirm if the below holds for both 
 // MTS_DRAGONFLY_L471QG and the NUCLEO_F767ZI targets:
 #define LED_ON  1
@@ -114,20 +108,6 @@ PlatformMutex g_STDIOMutex;
 // Do NOT use std::unique_ptr<> as we must NOT delete the shared
 // event queue pointer (a singleton) at any time.       
 EventQueue * g_pSharedEventQueue;
-
-// Here is the 'old-school way' of detecting (and changing behaviors based upon)
-// target type. My goal is to rather prefer elegant C++20 Concepts via the User's
-// own-specified template parameters in the Application (main.cpp) and whichever
-// intrinsic configurations were already parsed from the mbed_app.json that the 
-// User(s) themselves have already specified. Naturally and logically, the mbed_app.json
-// version will change based upon whether the to-be-tested target is MTS_DRAGONFLY_L471QG or
-// NUCLEO_F767ZI. My NUCLEO_F767ZI of course lacking the cellular shield. :
-//
-// #ifdef MTS_DRAGONFLY_L471QG
-// 
-// #elseif NUCLEO_F767ZI
-// 
-// #endif
 
 class LEDLightControl
 {   

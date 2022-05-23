@@ -161,6 +161,7 @@ private:
         UDPSocket                  m_TheSocket;
         SocketAddress              m_TheSocketAddress;
     #elif MBED_CONF_APP_SOCK_TYPE == NONIP
+        // Send and receive 3GPP non-IP datagrams (NIDD) using the cellular IoT feature.
         CellularNonIPSocket        m_TheSocket;
     #endif
 };

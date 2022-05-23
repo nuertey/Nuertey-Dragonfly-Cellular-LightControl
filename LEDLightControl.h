@@ -457,18 +457,37 @@ void LEDLightControl::ConnectToSocket()
     printf("Particular Network Interface Gateway: %s\n", gateway ? gateway : "None");
     printf("Particular Network Interface MAC Address: %s\n", mac ? mac : "None");
     
-    // TBD Nuertey Odzeyem; perhaps print Cellular statistics here too?
-    if (m_TheTransportSchemeType == TransportScheme_t::CELLULAR_4G_LTE)
+    // Opens:
+    // - UDP or TCP socket with the given echo server and performs an echo
+    //   transaction retrieving current message.
+    //
+    // - Cellular Non-IP socket for which the data delivery path is decided
+    //   by network's control plane CIoT optimisation setup, for the given APN.
+    if ((m_TheTransportSocketType == TransportSocket_t::TCP)
+     || (m_TheTransportSocketType == TransportSocket_t::UDP))
     {
-        CellularContext *ctx  = cellularDevice->create_context();
-        if (ctx)
+        nsapi_error_t rc = m_TheSocket.open(m_pNetworkInterface);
+        if (rc != NSAPI_ERROR_OK)
         {
-            if (ctx->connect() == NSAPI_ERROR_OK)
-            {
-                printf("Local IP address is %s", ctx->get_ip_address());
-            }
+            printf("\r\n\r\nError! TCPSocket or UDPSocket.open() returned: \
+                [%d] -> %s\r\n", rc, ToString(rc).c_str());
+                
+            return;
         }
     }
+    else if (m_TheTransportSocketType == TransportSocket_t::CELLULAR_NON_IP)
+    {
+        nsapi_error_t rc = m_TheSocket.open(static_cast<CellularContext*>(m_pNetworkInterface));
+        if (rc != NSAPI_ERROR_OK)
+        {
+            printf("\r\n\r\nError! CellularNonIPSocket.open() returned: \
+                [%d] -> %s\r\n", rc, ToString(rc).c_str());
+                
+            return;
+        }
+    }  
+    
+      
     
     // TBD Nuertey Odzeyem; resolve hostname here??? ...
     auto [ipAddress, domainName] = Utility::ResolveAddressIfDomainName(m_EchoServerAddress, m_pNetworkInterface);

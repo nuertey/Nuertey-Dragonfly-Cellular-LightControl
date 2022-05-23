@@ -41,7 +41,7 @@
 #include "nsapi_types.h"
 #include "EthernetInterface.h"
 
-using ErrorCodesMap_t = std::map<nsapi_size_or_error_t, std::string>;
+using ErrorCodesMap_t = std::map<nsapi_error_t, std::string>;
 using IndexElement_t  = ErrorCodesMap_t::value_type;
 
 inline static auto make_error_codes_map()
@@ -73,7 +73,7 @@ inline static auto make_error_codes_map()
 
 static ErrorCodesMap_t gs_ErrorCodesMap = make_error_codes_map();
 
-inline std::string ToString(const nsapi_size_or_error_t & key)
+inline std::string ToString(const nsapi_error_t & key)
 {
     return (gs_ErrorCodesMap.at(key));
 }

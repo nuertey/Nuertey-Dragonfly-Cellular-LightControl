@@ -356,7 +356,7 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
             
             break;
         case NSAPI_STATUS_DISCONNECTED:
-            printf("Socket disconnected from network!\r\n");
+            printf("NetworkInterface disconnected!\r\n");
             m_IsConnected = false;
             g_STDIOMutex.unlock();
             
@@ -377,7 +377,7 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
             g_STDIOMutex.unlock();
             break;
         default:
-            printf("Perhaps New Cellular Pointer Data Codes Have Here Arrived Asynchronously:\r\n");
+            printf("Perhaps New Cellular Pointer Data Codes Have Asynchronously Arrived:\r\n");
             g_STDIOMutex.unlock();
             
             if (statusEvent >= NSAPI_EVENT_CELLULAR_STATUS_BASE && statusEvent <= NSAPI_EVENT_CELLULAR_STATUS_END)
@@ -458,14 +458,17 @@ void LEDLightControl::ConnectToSocket()
     printf("Particular Network Interface MAC Address: %s\n", mac ? mac : "None");
     
     // TBD Nuertey Odzeyem; perhaps print Cellular statistics here too?
-    // CellularContext *ctx  = cellularDevice->create_context();
-    // if (ctx)
-    // {
-    //  if (ctx->connect() == NSAPI_ERROR_OK)
-    //  {
-    //      printf("Local IP address is %s", ctx->get_ip_address());
-    //  }
-    // }
+    if (m_TheTransportSchemeType == TransportScheme_t::CELLULAR_4G_LTE)
+    {
+        CellularContext *ctx  = cellularDevice->create_context();
+        if (ctx)
+        {
+            if (ctx->connect() == NSAPI_ERROR_OK)
+            {
+                printf("Local IP address is %s", ctx->get_ip_address());
+            }
+        }
+    }
     
     // TBD Nuertey Odzeyem; resolve hostname here??? ...
     auto [ipAddress, domainName] = Utility::ResolveAddressIfDomainName(m_EchoServerAddress, m_pNetworkInterface);

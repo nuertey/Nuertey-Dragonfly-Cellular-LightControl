@@ -73,8 +73,29 @@
 #define NUCLEO_F767ZI
 
 // Do NOT use std::unique_ptr<> as we must NOT delete the shared
-// event queue pointer (a singleton) at any time.       
+// event queue pointer (a singleton) at any time. 
 LEDLightControl * g_pLEDLightControl;
+
+// Alternate to the above global variable approach, would be to use a
+// local shared_ptr variable within main() as elucidated below, but perhaps
+// such an approach might be overkill on Embedded, perhaps:
+//
+    // "Also, always ensure to assign the shared_ptr--which must of necessity
+    // be declared as inheriting from:
+    //
+    // LEDLightControl : public std::enable_shared_from_this<LEDLightControl>
+    //
+    // --to a temporary otherwise it will run out of scope and the socket(s)
+    // will segfault with:
+    //
+    // [WARN] Error in reading from TCP socket connection:
+    // 127.0.0.1:5000
+    // Value := "Code: 125
+    //  Category: system
+    //  Message: Operation canceled
+    //
+    //auto theSessionManager = std::make_shared<LEDLightControl>();
+    //theSessionManager->Setup();"
 
 int main()
 {

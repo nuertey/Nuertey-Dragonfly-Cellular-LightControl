@@ -93,7 +93,6 @@ concept IsValidTransportType = (((transport == TransportScheme_t::CELLULAR_4G_LT
                              || ((transport == TransportScheme_t::MESH_NETWORK_Wi_SUNMODE_4)
     && (socket == TransportSocket_t::UDP)));
 
-
 // Per both potential MCU specs, common LED 'in situ' on the MCU:        
 // Target = MTS_DRAGONFLY_L471QG: UNO pin D3 (i.e. STM32 pin PA_0).
 // Target = NUCLEO_F767ZI: Green LED
@@ -130,26 +129,22 @@ public:
     
     void NetworkStatusCallback(nsapi_event_t status, intptr_t param);
     
-    template <TransportScheme_t transport, TransportSocket_t socket>
-        requires IsValidTransportType<transport, socket>
-    void Run();
+    void ConnectToSocket();
         
     void ChangeOperationMode(const IsOperationModeType& mode);
 
 protected:
     template <TransportScheme_t transport, TransportSocket_t socket>
         requires IsValidTransportType<transport, socket>
-    void Connect();
+    void ConnectToNetworkInterface();
 
-    template <TransportScheme_t transport, TransportSocket_t socket>
-        requires IsValidTransportType<transport, socket>
+    void Run();
     [[nodiscard]] bool Send();
-
-    template <TransportScheme_t transport, TransportSocket_t socket>
-        requires IsValidTransportType<transport, socket>
     [[nodiscard]] bool Receive();
     
 private:
+    TransportScheme_t              m_TheTransportSchemeType;
+    TransportSocket_t              m_TheTransportSocketType;
     NetworkInterface *             m_pNetworkInterface;
     CellularDevice *               m_pTheCellularDevice;
     std::optional<std::string>     m_EchoServerDomainName; // Domain name might not always necessarily exist...
@@ -172,6 +167,8 @@ private:
 
 // Note that:
 //
+// m_TheTransportSchemeType is deliberately 'self-initialized' by its enum composition.
+// m_TheTransportSocketType is deliberately 'self-initialized' by its enum composition.
 // m_pNetworkInterface is deliberately 'self-initialized' by its requisite default constructor.
 // m_pTheCellularDevice is deliberately 'self-initialized' by its requisite default constructor.
 LEDLightControl::LEDLightControl()
@@ -265,10 +262,62 @@ void LEDLightControl::Setup()
     //  */
     // virtual void cellular_callback(nsapi_event_t ev, intptr_t ptr, CellularContext *ctx = NULL);
     
+    // TBD Nuertey Odzeyem; remove all superfluous comments and clean up
+    // the implementation once class is tested and proven to be working
+    // like the below:
     
-    // LEDLightControl::Connect() should happen here and should be called by the class itself
-    // hence private or protected member:
-    Connect<transport, socket>();
+    // LEDLightControl::ConnectToNetworkInterface() should happen here 
+    // and should be called by the class itself hence private or protected member:
+    ConnectToNetworkInterface<transport, socket>();
+}
+
+template <TransportScheme_t transport, TransportSocket_t socket>
+    requires IsValidTransportType<transport, socket>
+void LEDLightControl::ConnectToNetworkInterface()
+{
+    // At this juncture, save and encapsulate template parameter variables
+    // within the class itself for later ::NetworkStatusCallbacks() to operate on.
+    m_TheTransportSchemeType = transport;
+    m_TheTransportSocketType = socket;    
+
+    // "Asynchronous operation
+    // 
+    // NetworkInterface::connect() and NetworkInterface::disconnect() are blocking
+    // by default. When an application prefers asynchronous operation, it can set
+    // the interface into nonblocking mode by calling NetworkInterface::set_blocking(false).
+    // This has to be done for each interface separately.
+    // 
+    // When an interface operates in asynchronous mode, the return values of connect()
+    // and disconnect() have slightly different meanings. Calling connect() starts the
+    // asynchronous operation, which puts the device in the GLOBAL_UP state. Calling
+    // disconnect() puts the target in the DISCONNECTED state. Return code in 
+    // asynchronous mode does not reflect the connection status. The most common 
+    // return codes in asynchronous mode is NSAPI_ERROR_OK, which means that operation
+    // just started. Please refer to the Doxygen documentation of NetworkInterface::connect()
+    // and NetworkInterface::disconnect() for return values of these functions.
+    // 
+    // To check whether the interface is connected, the application needs to register 
+    // the status callback for the interface. Please refer to the Network status API
+    // for information on how to do so."
+    //
+    // https://os.mbed.com/docs/mbed-os/v6.15/apis/network-interface.html
+    m_pNetworkInterface->set_blocking(false);
+    [[maybe_unused]] auto asynchronous_connect_return_perhaps_can_be_safely_ignored \
+                                           = m_pNetworkInterface->connect();
+      
+    // Setup complete, so we can now dispatch the shared event queue forever:
+    
+    // We will never return from the call below, as events are executed by 
+    // the dispatch_forever method.
+    if (g_pSharedEventQueue)
+    {
+        g_pSharedEventQueue->dispatch_forever();
+    }
+    else
+    {
+        assert(((void)"Such a thing ought to never happen but unfortunately (whom knows why?), g_pSharedEventQueue is nullptr!!", \
+            (g_pSharedEventQueue != nullptr)));
+    }
 }
 
 void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t parameterPointerData)
@@ -295,7 +344,7 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
             // Post the asynchronously notified network status change on the shared event
             // queue so that its actions can be scheduled and complete in synchronous
             // thread mode instead of in interrupt (i.e. callback) mode.
-            auto event1 = make_user_allocated_event(this, &LEDLightControl::Run);
+            auto event1 = make_user_allocated_event(this, &LEDLightControl::ConnectToSocket);
         
             // bind & post
             event1.call_on(g_pSharedEventQueue);
@@ -358,14 +407,17 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
                     //     _state_machine->set_plmn(_plmn);
                     // }
 
-                    // TBD Nuertey Odzeyem; should it be like this in this state of the Cellular state machine? 
+                    // TBD Nuertey Odzeyem; should it be like this in this
+                    // state of the Cellular state machine? 
                     // Confirm with testing...:
+                    g_STDIOMutex.lock();
                     m_IsConnected = true;
-                    //
+                    g_STDIOMutex.unlock();
+
                     // Post the asynchronously notified network status change on the shared event
                     // queue so that its actions can be scheduled and complete in synchronous
                     // thread mode instead of in interrupt (callback) mode.
-                    auto event1 = make_user_allocated_event(this, &LEDLightControl::Run);
+                    auto event1 = make_user_allocated_event(this, &LEDLightControl::ConnectToSocket);
                 
                     // bind & post
                     event1.call_on(g_pSharedEventQueue);
@@ -388,53 +440,7 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
     }
 }
 
-template <TransportScheme_t transport, TransportSocket_t socket>
-    requires IsValidTransportType<transport, socket>
-void LEDLightControl::Connect()
-{
-    // "Asynchronous operation
-    // 
-    // NetworkInterface::connect() and NetworkInterface::disconnect() are blocking
-    // by default. When an application prefers asynchronous operation, it can set
-    // the interface into nonblocking mode by calling NetworkInterface::set_blocking(false).
-    // This has to be done for each interface separately.
-    // 
-    // When an interface operates in asynchronous mode, the return values of connect()
-    // and disconnect() have slightly different meanings. Calling connect() starts the
-    // asynchronous operation, which puts the device in the GLOBAL_UP state. Calling
-    // disconnect() puts the target in the DISCONNECTED state. Return code in 
-    // asynchronous mode does not reflect the connection status. The most common 
-    // return codes in asynchronous mode is NSAPI_ERROR_OK, which means that operation
-    // just started. Please refer to the Doxygen documentation of NetworkInterface::connect()
-    // and NetworkInterface::disconnect() for return values of these functions.
-    // 
-    // To check whether the interface is connected, the application needs to register 
-    // the status callback for the interface. Please refer to the Network status API
-    // for information on how to do so."
-    //
-    // https://os.mbed.com/docs/mbed-os/v6.15/apis/network-interface.html
-    m_pNetworkInterface->set_blocking(false);
-    [[maybe_unused]] auto asynchronous_connect_return_perhaps_can_be_safely_ignored \
-                                           = m_pNetworkInterface->connect();
-      
-    // Setup complete, so we can now dispatch the shared event queue forever:
-    
-    // We will never return from the call below, as events are executed by 
-    // the dispatch_forever method.
-    if (g_pSharedEventQueue)
-    {
-        g_pSharedEventQueue->dispatch_forever();
-    }
-    else
-    {
-        assert(((void)"Such a thing ought to never happen but unfortunately (whom knows why?), g_pSharedEventQueue is nullptr!!", \
-            (g_pSharedEventQueue != nullptr)));
-    }
-}
-
-template <TransportScheme_t transport, TransportSocket_t socket>
-    requires IsValidTransportType<transport, socket>
-void LEDLightControl::Run()
+void LEDLightControl::ConnectToSocket()
 {
     // Show the particular NetworkInterface addresses to encourage Debug. 
     // Don't forget that this class object is being designed to handle 
@@ -505,11 +511,20 @@ void LEDLightControl::Run()
     //  */
     // bool test_send_and_receive()
     
+    // TBD Nuertey Odzeyem; call non-returning function ::Run() here to do the
+    // actual sending and receiving if m_IsConnected is true, and forget
+    // not to actual exit and drop out of ::Run() if m_IsConnected is false.
+    // Subsequent NetworkStatusCallbacks() will handle dispatching the
+    // ConnectToSocket() event again.
+}
+
+void LEDLightControl::Run()
+{
     while (true)
     {
-        if (Send<transport, socket>())
+        if (Send())
         {
-            if (Receive<transport, socket>())
+            if (Receive())
             {
                 // Update LED here?
                 continue;
@@ -526,8 +541,6 @@ void LEDLightControl::Run()
     }
 }
 
-template <TransportScheme_t transport, TransportSocket_t socket>
-    requires IsValidTransportType<transport, socket>
 bool LEDLightControl::Send()
 {
     if constexpr (transport == TransportScheme_t::CELLULAR_4G_LTE) 
@@ -544,8 +557,6 @@ bool LEDLightControl::Send()
     }
 }
 
-template <TransportScheme_t transport, TransportSocket_t socket>
-    requires IsValidTransportType<transport, socket>
 bool LEDLightControl::Receive()
 {
     if constexpr (transport == TransportScheme_t::CELLULAR_4G_LTE) 

@@ -96,6 +96,10 @@ constexpr auto ToEnum(V value) -> E
     
 namespace Utilities
 {
+    // TBD Nuertey Odzeyem; remove these clock functions if not needed in
+    // the LightControl application. Likewise any other superfluous functions
+    // such as IntegerToHex(). Note that Domain... functions might be needed.
+    
     // This custom clock type obtains the time from RTC too whilst noting the Processor speed.
     struct NucleoF767ZIClock_t
     {

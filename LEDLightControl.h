@@ -48,9 +48,9 @@
 #define LED_OFF 0
 
 // Choice of socket type configuration parsed from mbed_app.json:
-#define UDP 0
-#define TCP 1
-#define NONIP 2
+#define NUERTEY_UDP 0
+#define NUERTEY_TCP 1
+#define NUERTEY_NONIP 2
 
 enum class TransportScheme_t : uint8_t
 {
@@ -67,13 +67,14 @@ enum class TransportSocket_t : uint8_t
     CELLULAR_NON_IP
 };
 
-#if MBED_CONF_APP_SOCK_TYPE == TCP
-    static constexpr char SOCKET_TYPE[] = "TCP";
-#elif MBED_CONF_APP_SOCK_TYPE == UDP
-    static constexpr char SOCKET_TYPE[] = "UDP";
-#elif MBED_CONF_APP_SOCK_TYPE == NONIP
-    static constexpr char SOCKET_TYPE[] = "CellularNonIP";
-#endif
+// TBD Nuertey Odzeyem; I dont think these are any longer needed. Remove if confirmed.
+//#if MBED_CONF_APP_SOCK_TYPE == NUERTEY_TCP
+//    static constexpr char SOCKET_TYPE[] = "TCP";
+//#elif MBED_CONF_APP_SOCK_TYPE == NUERTEY_UDP
+//    static constexpr char SOCKET_TYPE[] = "UDP";
+//#elif MBED_CONF_APP_SOCK_TYPE == NUERTEY_NONIP
+//    static constexpr char SOCKET_TYPE[] = "CellularNonIP";
+//#endif
 
 static constexpr char ECHO_HOSTNAME[] = MBED_CONF_APP_ECHO_SERVER_HOSTNAME;
 static constexpr int ECHO_PORT = MBED_CONF_APP_ECHO_SERVER_PORT; // Same value holds for TCP and UDP.
@@ -167,16 +168,28 @@ private:
     // For example, instead of using TCPSocket* in methods, the application
     // can use Socket* to allow either UDP or TCP to work, or even TLS."
     //
-    // https://os.mbed.com/docs/mbed-os/v6.15/apis/socket.html 
-    #if MBED_CONF_APP_SOCK_TYPE == TCP
-        TCPSocket                  m_TheSocket;
-        SocketAddress              m_TheSocketAddress;
-    #elif MBED_CONF_APP_SOCK_TYPE == UDP
-        UDPSocket                  m_TheSocket;
-        SocketAddress              m_TheSocketAddress;
-    #elif MBED_CONF_APP_SOCK_TYPE == NONIP
+    // https://os.mbed.com/docs/mbed-os/v6.15/apis/socket.html
+    
+    // TBD Nuertey Odzeyem; enhance this LEDLightControl class encapsulation
+    // to, instead of the below, rather use the portable Socket class interface
+    // in handling all the 3 possible socket types. Ergo:
+    //
+    // Socket *                 m_pTheSocket;
+    // SocketAddress            m_TheSocketAddress;
+    //
+    // And then create the requisite derived socket types based on the
+    // templatized TransportSocket_t as you are already doing in the rest
+    // of the code.
+    
+    #if MBED_CONF_APP_SOCK_TYPE == NUERTEY_TCP
+        TCPSocket               m_TheSocket;
+        SocketAddress           m_TheSocketAddress;
+    #elif MBED_CONF_APP_SOCK_TYPE == NUERTEY_UDP
+        UDPSocket               m_TheSocket;
+        SocketAddress           m_TheSocketAddress;
+    #elif MBED_CONF_APP_SOCK_TYPE == NUERTEY_NONIP
         // Send and receive 3GPP non-IP datagrams (NIDD) using the cellular IoT feature.
-        CellularNonIPSocket        m_TheSocket;
+        CellularNonIPSocket     m_TheSocket;
     #endif
 };
 
@@ -345,10 +358,13 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
     switch (parameterPointerData)
     {
         case NSAPI_STATUS_LOCAL_UP:
+        {
             printf("Local IP address set!\r\n");
             g_STDIOMutex.unlock();
             break;
+        }
         case NSAPI_STATUS_GLOBAL_UP:
+        {
             printf("Global IP address set!\r\n");
             m_IsConnected = true;
             g_STDIOMutex.unlock();
@@ -367,7 +383,9 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
             // The EventQueue only schedules events based on time.
             
             break;
+        }
         case NSAPI_STATUS_DISCONNECTED:
+        {
             printf("NetworkInterface disconnected!\r\n");
             m_IsConnected = false;
             g_STDIOMutex.unlock();
@@ -384,28 +402,32 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
                 // }
             }
             break;
+        }
         case NSAPI_STATUS_CONNECTING:
+        {
             printf("Connecting to network!\r\n");
             g_STDIOMutex.unlock();
             break;
+        }
         default:
+        {
             printf("Perhaps New Cellular Pointer Data Codes Have Asynchronously Arrived:\r\n");
             g_STDIOMutex.unlock();
             
             if (statusEvent >= NSAPI_EVENT_CELLULAR_STATUS_BASE && statusEvent <= NSAPI_EVENT_CELLULAR_STATUS_END)
             {
-                cell_callback_data_t *ptr_data = static_cast<cell_callback_data_t *>(parameterPointerData);
+                cell_callback_data_t *ptr_data = (cell_callback_data_t *)parameterPointerData;
                 
                 tr_debug("Network Status Event Callback: %d, \t\r\nptr_data->error: %d, \t\r\nptr_data->status_data: %d", \
                     statusEvent, ptr_data->error, ptr_data->status_data);
                 
                 cellular_connection_status_t cellEvent = static_cast<cellular_connection_status_t>(statusEvent);
                 
-                if (cellEvent == CellularRegistrationStatusChanged)
-                {
-                    // broadcast only network registration changes to state machine
-                    //_state_machine->cellular_event_changed(ev, ptr);
-                }
+                //if (cellEvent == CellularRegistrationStatusChanged)
+                //{
+                //    // broadcast only network registration changes to state machine
+                //    //_state_machine->cellular_event_changed(ev, ptr);
+                //}
 
                 if (cellEvent == CellularDeviceReady && ptr_data->error == NSAPI_ERROR_OK)
                 {
@@ -439,16 +461,17 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
                     // which the events run relative to one another is undefined. 
                     // The EventQueue only schedules events based on time.
                 }
-                else if (cellEvent == CellularSIMStatusChanged && ptr_data->error == NSAPI_ERROR_OK &&
-                         ptr_data->status_data == CellularSIM::SimStatePinNeeded)
-                {
-                    // if (strlen(_sim_pin))
-                    // {
-                    //     _state_machine->set_sim_pin(_sim_pin);
-                    // }
-                }
+                //else if (cellEvent == CellularSIMStatusChanged && ptr_data->error == NSAPI_ERROR_OK &&
+                //         ptr_data->status_data == CellularSIM::SimStatePinNeeded)
+                //{
+                //    // if (strlen(_sim_pin))
+                //    // {
+                //    //     _state_machine->set_sim_pin(_sim_pin);
+                //    // }
+                //}
             }
             break;
+        }
     }
 }
 
@@ -459,16 +482,13 @@ void LEDLightControl::ConnectToSocket()
     // several NetworkInterfaces--primarily Cellular, yes?, but also Ethernet
     // to aid debug and testing, and can even be extended in the future 
     // for Mesh Networks... as already documented in the above preliminaries: 
-    const char *ip = m_pNetworkInterface->get_ip_address();
-    const char *netmask = m_pNetworkInterface->get_netmask();
-    const char *gateway = m_pNetworkInterface->get_gateway();
-    const char *mac = m_pNetworkInterface->get_mac_address();
+    auto [ip, netmask, gateway, mac] = Utilities::GetNetworkInterfaceProfile(m_pNetworkInterface);
     
-    printf("Particular Network Interface IP address: %s\n", ip ? ip : "None");
-    printf("Particular Network Interface Netmask: %s\n", netmask ? netmask : "None");
-    printf("Particular Network Interface Gateway: %s\n", gateway ? gateway : "None");
-    printf("Particular Network Interface MAC Address: %s\n", mac ? mac : "None");
-    
+    printf("Particular Network Interface IP address: %s\n", ip.value_or("(null)"));
+    printf("Particular Network Interface Netmask: %s\n", netmask.value_or("(null)"));
+    printf("Particular Network Interface Gateway: %s\n", gateway.value_or("(null)"));
+    printf("Particular Network Interface MAC Address: %s\n", mac.value_or("(null)"));
+        
     // Opens:
     // - UDP or TCP socket with the given echo server and performs an echo
     //   transaction retrieving current message.
@@ -526,9 +546,9 @@ void LEDLightControl::ConnectToSocket()
     
     if (m_TheTransportSocketType != TransportSocket_t::CELLULAR_NON_IP)
     {
-        auto ipAddress = Utility::ResolveAddressIfDomainName(m_EchoServerAddress
-                                                           , m_pNetworkInterface
-                                                           , &m_TheSocketAddress);
+        auto ipAddress = Utilities::ResolveAddressIfDomainName(m_EchoServerAddress
+                                                             , m_pNetworkInterface
+                                                             , &m_TheSocketAddress);
         
         if (ipAddress)
         {

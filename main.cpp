@@ -67,10 +67,10 @@
 // actual contents of the configuration options defined in the mbed_app.json:
 
 // Primary usecase:
-//#define MTS_DRAGONFLY_L471QG 
+//#define NUERTEY_MTS_DRAGONFLY_L471QG 
 
 // To allow for potential debug testing on the only MCU that I do have available:
-#define NUCLEO_F767ZI
+#define NUERTEY_NUCLEO_F767ZI
 
 // Do NOT use std::unique_ptr<> as we must NOT delete the shared
 // event queue pointer (a singleton) at any time. 
@@ -119,11 +119,11 @@ int main()
     // User(s) themselves have already specified. Naturally and logically, the mbed_app.json
     // version will change based upon whether the to-be-tested target is MTS_DRAGONFLY_L471QG or
     // NUCLEO_F767ZI. My NUCLEO_F767ZI of course lacking the cellular shield.
-#ifdef MTS_DRAGONFLY_L471QG
+#ifdef NUERTEY_MTS_DRAGONFLY_L471QG
     // This call will never return as it encapsulates an EventQueue's
     // ::dispatch_forever() method.
     g_pLEDLightControl->Setup<TransportScheme_t::CELLULAR_4G_LTE, TransportSocket_t::TCP>();
-#elseif NUCLEO_F767ZI
+#elseif NUERTEY_NUCLEO_F767ZI
     // This call will never return as it encapsulates an EventQueue's
     // ::dispatch_forever() method.
     g_pLEDLightControl->Setup<TransportScheme_t::ETHERNET, TransportSocket_t::TCP>();

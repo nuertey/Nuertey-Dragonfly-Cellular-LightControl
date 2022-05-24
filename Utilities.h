@@ -75,6 +75,37 @@ inline std::string ToString(const nsapi_error_t & key)
     
 namespace Utilities
 {
+    const auto GetNetworkInterfaceProfile = [](NetworkInterface * pInterface)
+    {
+        std::optional<std::string> ip(std::nullopt);
+        std::optional<std::string> netmask(std::nullopt);
+        std::optional<std::string> gateway(std::nullopt);
+        std::optional<std::string> mac(std::nullopt);
+        
+        // Retrieve the network addresses:
+        SocketAddress socketAddress;
+        pInterface->get_ip_address(&socketAddress);
+        ip.emplace(socketAddress.get_ip_address());
+        
+        SocketAddress socketAddress1;
+        pInterface->get_netmask(&socketAddress1);        
+        const char * netmask = socketAddress1.get_ip_address();
+        ip.emplace(socketAddress.get_ip_address());
+        
+        SocketAddress socketAddress2;
+        pInterface->get_gateway(&socketAddress2);
+        const char * gateway = socketAddress2.get_ip_address();
+        ip.emplace(socketAddress.get_ip_address());
+        
+        // "Provided MAC address is intended for info or debug purposes
+        // and may be not provided if the underlying network interface
+        // does not provide a MAC address."
+        const char * mac = pInterface->get_mac_address();
+        ip.emplace(socketAddress.get_ip_address());
+        
+        return std::make_tuple(ip, netmask, gateway, mac);
+    };
+    
     const auto IsDomainNameAddress = [](const std::string & address)
     {
         bool result = false;

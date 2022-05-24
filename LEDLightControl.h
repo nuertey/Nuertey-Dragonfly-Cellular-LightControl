@@ -95,6 +95,7 @@ concept IsValidTransportType = (((transport == TransportScheme_t::CELLULAR_4G_LT
 // Target = MTS_DRAGONFLY_L471QG: UNO pin D3 (i.e. STM32 pin PA_0).
 // Target = NUCLEO_F767ZI: Green LED
 DigitalOut g_UserLED(LED1);
+bool       g_UserLEDState{false};  // Logically, the board will bootup with the LED off.
 
 // Protect the platform STDIO object so it is shared politely between 
 // threads, periodic events and periodic callbacks (not hopefully in IRQ context
@@ -111,11 +112,9 @@ class LEDLightControl
     // 1 minute of failing to exchange packets with the EchoServer ought
     // to be enough to tell us that there is something wrong with the socket.
     static constexpr int32_t BLOCKING_SOCKET_TIMEOUT_MILLISECONDS{60000};
-
-    static constexpr auto LED_BLINKING_RATE = 500ms;
-    
-    static constexpr auto     STARTUP_STATUS_CHECK_DELAY    {10ms};
-    static constexpr auto     CHANGE_MEASUREMENT_MODE_DELAY {50ms};
+    static constexpr uint8_t MASTER_LIGHT_CONTROL_GROUP{0};
+    static constexpr uint8_t     MY_LIGHT_CONTROL_GROUP{1};
+    static constexpr uint32_t STANDARD_BUFFER_SIZE{1024}; // 1 K ought to cover all our cases.
     
 public:
     LEDLightControl();
@@ -603,28 +602,55 @@ void LEDLightControl::Run()
 
 bool LEDLightControl::Send()
 {
-    auto result = true;
+    auto result = false;
+    char rawBuffer[STANDARD_BUFFER_SIZE];
+    int lengthWritten{0};    
+    
+    // Simulate LED blinking through LightControl protocol messages sent 
+    // on the various supported socket transport protocols:
+    g_UserLEDState = !g_UserLEDState;
+    
+    // Protocol for LightControl message is a NUL terminated string of 
+    // semicolon separated <field identifier>:<value> pairs.
+    // 
+    // LightControl protocol message format:
+    //
+    // t:lights;g:<group_id>;s:<1|0>;\0
+    // 
+    lengthWritten = std::snprintf(rawBuffer, 
+                                  sizeof(rawBuffer), 
+                                  "t:lights;g:%03d;s:%s;", 
+                                  MY_LIGHT_CONTROL_GROUP, 
+                                  (g_UserLEDState ? "1" : "0")) + 1; // Ensure to account for terminating NUL.
+    
+    MBED_ASSERT(lengthWritten > 0);
     
     if (m_TheTransportSocketType != TransportSocket_t::UDP)
     {
-        nsapi_error_t rc = m_TheSocket.send((void*) echo_string, strlen(echo_string));
+        nsapi_error_t rc = m_TheSocket.send(rawBuffer, lengthWritten);
         
         if (rc != NSAPI_ERROR_OK)
         {
             printf("\r\n\r\nError! m_TheSocket.send() to EchoServer returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
-            result = false;
+        }
+        else
+        {
+            result = true;
         }
     }
     else
     {
-        nsapi_error_t rc = m_TheSocket.sendto(m_TheSocketAddress, (void*) echo_string, strlen(echo_string));
+        nsapi_error_t rc = m_TheSocket.sendto(m_TheSocketAddress, rawBuffer, lengthWritten);
         
         if (rc != NSAPI_ERROR_OK)
         {
             printf("\r\n\r\nError! m_TheSocket.sendto() to EchoServer returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
-            result = false;
+        }
+        else
+        {
+            result = true;
         }
     }
     

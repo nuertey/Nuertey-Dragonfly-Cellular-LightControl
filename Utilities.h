@@ -196,7 +196,8 @@ namespace Utilities
     };
 
     const auto ResolveAddressIfDomainName = [](const std::string & address
-                                             , NetworkInterface * pInterface)
+                                             , NetworkInterface * pInterface
+                                             , SocketAddress * pTheSocketAddress)
     {
         std::optional<std::string> ipAddress(std::nullopt);
 
@@ -207,11 +208,9 @@ namespace Utilities
                 // Note that the MBED_ASSERT macro is only available in the Debug 
                 // and Development build profiles and not in the Release build profile. 
                 MBED_ASSERT(pInterface);
-                
-                SocketAddress serverSocketAddress;
 
                 printf("\r\nPerforming DNS lookup for : \"%s\" ...", address.c_str());
-                nsapi_error_t retVal = pInterface->gethostbyname(address.c_str(), &serverSocketAddress);
+                nsapi_error_t retVal = pInterface->gethostbyname(address.c_str(), pTheSocketAddress);
                 if (retVal < 0)
                 {
                     printf("\r\nError! On DNS lookup, Network returned: [%d] -> %s", retVal, ToString(retVal).c_str());
@@ -219,7 +218,7 @@ namespace Utilities
 
                 // No need to do the explicit construction of std::string
                 // as we are emplace'ing:
-                ipAddress.emplace(serverSocketAddress.get_ip_address());
+                ipAddress.emplace(pTheSocketAddress->get_ip_address());
             }
         }
 

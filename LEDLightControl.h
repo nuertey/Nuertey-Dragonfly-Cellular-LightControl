@@ -130,8 +130,6 @@ public:
     void NetworkStatusCallback(nsapi_event_t status, intptr_t param);
     
     void ConnectToSocket();
-        
-    void ChangeOperationMode(const IsOperationModeType& mode);
 
 protected:
     template <TransportScheme_t transport, TransportSocket_t socket>
@@ -146,11 +144,13 @@ private:
     TransportScheme_t          m_TheTransportSchemeType;
     TransportSocket_t          m_TheTransportSocketType;
     NetworkInterface *         m_pNetworkInterface;
-    CellularDevice *           m_pTheCellularDevice;
+    
+    // To enable soft_power_off/on(), shutdown(), hard_power_on/off(), and such functions.
+    CellularDevice *           m_pTheCellularDevice;   
+    
     std::string                m_EchoServerDomainName; // Domain name will always exist.
     std::optional<std::string> m_EchoServerAddress;    // However IP Address might not always exist...
     uint16_t                   m_EchoServerPort;
-    IsOperationModeType        m_OperationMode;
     bool                       m_IsConnected;
     
     // Conditional class members based upon configuration parsed from 
@@ -187,7 +187,6 @@ LEDLightControl::LEDLightControl()
     : m_EchoServerDomainName(ECHO_HOSTNAME)
     , m_EchoServerAddress(std::nullopt)
     , m_EchoServerPort(ECHO_PORT) 
-    , m_OperationMode(standbyMode)
     , m_IsConnected(false)
     // Deliberately letting the conditional class member variables 'self-initialize'
     // by default-constructing. 
@@ -527,7 +526,8 @@ void LEDLightControl::ConnectToSocket()
     if (m_TheTransportSocketType != TransportSocket_t::CELLULAR_NON_IP)
     {
         auto ipAddress = Utility::ResolveAddressIfDomainName(m_EchoServerAddress
-                                                           , m_pNetworkInterface);
+                                                           , m_pNetworkInterface
+                                                           , &m_TheSocketAddress);
         
         if (ipAddress)
         {
@@ -543,35 +543,38 @@ void LEDLightControl::ConnectToSocket()
             return; 
         }
         m_TheSocketAddress.set_port(m_EchoServerPort);
+
+        if (m_TheTransportSocketType == TransportSocket_t::TCP)
+        {
+            printf("\r\nConnecting to : \"%s:%d\" ...", \
+                (*m_EchoServerAddress).c_str(), m_EchoServerPort);
+                
+            nsapi_error_t rc = m_TheSocket.connect(m_TheSocketAddress);
+
+            if (rc != NSAPI_ERROR_OK)
+            {
+                printf("\r\n\r\nError! TCPSocket.connect() to EchoServer returned:\
+                    [%d] -> %s\n", rc, ToString(rc).c_str());
+                    
+                // Abandon attempting to connect to the socket. Subsequent 
+                // NetworkStatusCallbacks() will dispatch the ConnectToSocket()
+                // event again should network conditions become better favorable.                
+                return;
+            }
+            else
+            {   
+                printf("\r\nSuccess! Connected to EchoServer at: \"%s:%d\"", \
+                    (*m_EchoServerAddress).c_str(), m_EchoServerPort);
+            }
+        }
     }
-
-    printf("\r\nConnecting to : \"%s:%d\" ...", m_EchoServerAddress.c_str(), m_EchoServerPort);
-    // nsapi_error_t rc = m_pNetworkInterface.connect();
-    // 
-    // if (rc != NSAPI_ERROR_OK)
-    // {
-    //     printf("\r\n\r\nError! NetworkInterface.connect() to EchoServer returned: [%d] -> %s\n", rc, ToString(rc).c_str());
-    // }
-    // else
-    // {   
-
-    // }
     
-    // "Open a socket on the network interface, and create a TCP connection to mbed.org..."
-    // // TBD Nuertey Odzeyem; perform socket.open() and connect() here???? Do so if it seems logical....
-    // 
-    // 
-    
-    // TBD Nuertey Odzeyem; call non-returning function ::Run() here to do the
-    // actual sending and receiving if m_IsConnected is true, and forget
-    // not to actual exit and drop out of ::Run() if m_IsConnected is false.
-    // Subsequent NetworkStatusCallbacks() will handle dispatching the
-    // ConnectToSocket() event again.
+    Run();
 }
 
 void LEDLightControl::Run()
 {
-    while (true)
+    while (m_IsConnected)
     {
         if (Send())
         {
@@ -590,6 +593,10 @@ void LEDLightControl::Run()
             break;
         }
     }
+    
+    // Abandon exchanging packets with the EchoServer. Subsequent 
+    // NetworkStatusCallbacks() will dispatch the ConnectToSocket()
+    // event again should network conditions become better favorable. 
 }
 
 bool LEDLightControl::Send()
@@ -624,107 +631,4 @@ bool LEDLightControl::Receive()
     }
 }
 
-void LEDLightControl::ChangeOperationMode(const IsOperationModeType& mode)
-{
-    // \" In order to avoid a real time error, it is strongly recommended
-    // to verify that the DRDY signal is low (no new data) before 
-    // activating new mode. \"
-    if (Utilities::g_ExternalDataReadyPin.read() == 0)
-    {
-        if (mode == highResolutionMeasurementMode) 
-        {
-            WriteToDirectRegister<RegisterAddress_t::OPERATION>(Operation_t::INITIATE_HIGH_RESOLUTION_ACQUISITION_MODE);
-        }
-        else if (mode == highSpeedMeasurementMode) 
-        {
-            WriteToDirectRegister<RegisterAddress_t::OPERATION>(Operation_t::INITIATE_HIGH_SPEED_ACQUISITION_MODE);
-        }    
-        else if (mode == ultraLowPowerMeasurementMode) 
-        {
-            WriteToDirectRegister<RegisterAddress_t::OPERATION>(Operation_t::INITIATE_ULTRA_LOW_POWER_ACQUISITION_MODE);
-        }    
-        else if (mode == lowPowerMeasurementWithExternalTriggerMode) 
-        {
-            WriteToDirectRegister<RegisterAddress_t::OPERATION>(Operation_t::INITIATE_LOW_POWER_ACQUISITION_MODE);
-        }    
-        else if ((mode == standbyMode) 
-              || (mode == powerDownMode))
-        {
-            WriteToDirectRegister<RegisterAddress_t::OPERATION>(Operation_t::CANCEL_CURRENT_OPERATION_MODE);
-        }                
-        m_OperationMode = mode;
-    }
-    else if (Utilities::g_ExternalDataReadyPin.read() == 1)
-    {
-        // \" If DRDY is high it is necessary to read the output data 
-        // before activating new measurement mode. \"
-        
-        // Post the requested operation mode change on the shared event
-        // queue so that the already enqueued Data Ready signal therefore
-        // ::AcquireSensorData() method can be scheduled and complete 
-        // first before actually changing the operation mode.
-        auto event1 = make_user_allocated_event(&this, 
-                      &LEDLightControl::ChangeOperationMode, mode);
-        
-        // bind & post
-        event1.call_on(Utilities::g_pSharedEventQueue);
-        
-        // Note that the EventQueue has no concept of event priority. 
-        // If you schedule events to run at the same time, the order in
-        // which the events run relative to one another is undefined. 
-        // The EventQueue only schedules events based on time.
-    }   
-}
 
-void LEDLightControl::AcquireSensorData()
-{
-    if ((m_OperationMode == highResolutionMeasurementMode)
-     || (m_OperationMode == highSpeedMeasurementMode)
-     || (m_OperationMode == ultraLowPowerMeasurementMode))
-    {
-        // \"
-        // 2.2.1.1 Continuous measurement modes
-        //
-        // In continuous measurement mode the output data is refreshed after
-        // each measurement and the availability of the updated pressure and
-        // temperature data is signaled through the assertion of the DRDY 
-        // pin and a DRDY bit is set to ‘1’ in the STATUS register. \"
-        
-        // \" 
-        // 2.2.3 Reading the pressure and temperature
-        //
-        // After the DRDY pin has signaled the availability of new measurement
-        // data, it is recommended that the output data is read immediately
-        // in the following order:
-        //
-        // o read the TEMPOUT register (temperature data in bits [13:0] – in
-        // case the temperature data is not needed this step can be omitted).
-        //
-        // o read the DATARD8 register (bits [2:0] contain the MSB of the 
-        //   pressure data)
-        //
-        // o read the DATARD16 register (contains the 16 LSB of the pressure
-        //   data) \"
-        
-        // \" 2.4 DRDY – data ready pin
-        //
-        // Availability of updated pressure and temperature data is signaled
-        // through the assertion of the DRDY pin. DRDY is cleared after the
-        // DATARD16 register is read, see section 2.2.1 for more detailed
-        // information. \"
-
-        // Always read temperature first and then pressure sensor data so as
-        // to clear the DRDY signal pin:
-        printf("On-chip temperature sensor:\n\t-> %s °C\n", 
-            TruncateAndToString<double>(GetTemperature<Celsius_t>()).c_str());
-        
-        printf("On-chip temperature sensor:\n\t-> %s °F\n", 
-            TruncateAndToString<double>(GetTemperature<Fahrenheit_t>()).c_str());
-        
-        printf("On-chip temperature sensor:\n\t-> %s K\n",  
-            TruncateAndToString<double>(GetTemperature<Kelvin_t>()).c_str());
-            
-        printf("Barometric pressure:\n\t->%s Pa\n\n", 
-            TruncateAndToString<double>(GetPressure()).c_str());
-    }
-}

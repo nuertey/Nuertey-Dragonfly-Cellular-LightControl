@@ -581,7 +581,6 @@ void LEDLightControl::Run()
         {
             if (Receive())
             {
-                // TBD Nuertey Odzeyem; Update LED here?
                 continue;
             }
             else
@@ -659,29 +658,187 @@ bool LEDLightControl::Send()
 
 bool LEDLightControl::Receive()
 {
-    auto result = true;
-    uint8_t receive_buffer[20];
+    auto result = false;
+    char receiveBuffer[STANDARD_BUFFER_SIZE];
+
+    memset(receiveBuffer, 0, sizeof(receiveBuffer));
     
     if (m_TheTransportSocketType != TransportSocket_t::UDP)
     {
-        nsapi_error_t rc = m_TheSocket.recv((void*)receive_buffer, sizeof(receive_buffer));
+        nsapi_size_or_error_t rc = m_TheSocket.recv(receiveBuffer, 
+                                                    sizeof(receiveBuffer) - 1);
         
-        if (rc != NSAPI_ERROR_OK)
+        
+        if (rc > 0)
         {
-            printf("\r\n\r\nError! m_TheSocket.recv() from EchoServer returned:\
+            // Some data received of length rc so it is reasonable to
+            // presume that the socket is still functioning properly.
+            result = true;
+                        
+            std::string s(receiveBuffer, rc);
+            std::string delimiter = ";";
+                        
+            size_t pos = 0;
+            std::string token;
+            if ((pos = s.find(delimiter)) != std::string::npos)
+            {
+                token = s.substr(0, pos);
+                if (!token.compare("t:lights"))
+                {
+                    s.erase(0, pos + delimiter.length());
+                    
+                    if ((pos = s.find(delimiter)) != std::string::npos)
+                    {
+                        token = s.substr(0, pos);
+                        if (!token.compare("g:001")) // MY_LIGHT_CONTROL_GROUP
+                        {
+                            s.erase(0, pos + delimiter.length());
+                            
+                            if ((pos = s.find(delimiter)) != std::string::npos)
+                            {
+                                token = s.substr(0, pos);
+                                if (!token.compare("s:0"))
+                                {
+                                    g_UserLED = LED_OFF;
+                                }
+                                else if (!token.compare("s:1"))
+                                {
+                                    g_UserLED = LED_ON;
+                                }
+                                else
+                                {
+                                    printf("\r\n\r\nError! \"s:<1|0>\" comparison failed. \
+                                        We rather parsed: \"%s\"\r\n", token.c_str());
+                                }
+                            }
+                            else
+                            {
+                                printf("\r\n\r\nError! 3rd occurrence of LightControl \
+                                    message delimiter parsing failed.\r\n");
+                            }
+                        }
+                        else
+                        {
+                            printf("\r\n\r\nError! \"g:001\" comparison failed. \
+                                We rather parsed: \"%s\"\r\n", token.c_str());
+                        }
+                    }
+                    else
+                    {
+                        printf("\r\n\r\nError! 2nd occurrence of LightControl \
+                            message delimiter parsing failed.\r\n");
+                    }
+                }
+                else
+                {
+                    printf("\r\n\r\nError! \"t:lights\" comparison failed. \
+                        We rather parsed: \"%s\"\r\n", token.c_str());
+                }
+            }
+            else
+            {
+                printf("\r\n\r\nError! 1st occurrence of LightControl \
+                    message delimiter parsing failed.\r\n");
+            }
+        }
+        else if (rc < 0)
+        {
+            printf("\r\n\r\nError! m_TheSocket.recv() returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
-            result = false;
+        }
+        else
+        {
+            printf("\r\n\r\nError! m_TheSocket.recv() indicated :\n\t\
+                \"No data available to be received and the peer has performed an orderly shutdown.\"\n");
         }
     }
     else
     {
-        nsapi_error_t rc = m_TheSocket.recvfrom(&m_TheSocketAddress, (void*)receive_buffer, sizeof(receive_buffer));
+        nsapi_size_or_error_t rc = m_TheSocket.recvfrom(&m_TheSocketAddress, 
+                                                        receiveBuffer, 
+                                                        sizeof(receiveBuffer) - 1);
         
-        if (rc != NSAPI_ERROR_OK)
+        if (rc > 0)
         {
-            printf("\r\n\r\nError! m_TheSocket.recvfrom() from EchoServer returned:\
+            // Some data received of length rc so it is reasonable to
+            // presume that the socket is still functioning properly.
+            result = true;
+                        
+            std::string s(receiveBuffer, rc);
+            std::string delimiter = ";";
+                        
+            size_t pos = 0;
+            std::string token;
+            if ((pos = s.find(delimiter)) != std::string::npos)
+            {
+                token = s.substr(0, pos);
+                if (!token.compare("t:lights"))
+                {
+                    s.erase(0, pos + delimiter.length());
+                    
+                    if ((pos = s.find(delimiter)) != std::string::npos)
+                    {
+                        token = s.substr(0, pos);
+                        if (!token.compare("g:001")) // MY_LIGHT_CONTROL_GROUP
+                        {
+                            s.erase(0, pos + delimiter.length());
+                            
+                            if ((pos = s.find(delimiter)) != std::string::npos)
+                            {
+                                token = s.substr(0, pos);
+                                if (!token.compare("s:0"))
+                                {
+                                    g_UserLED = LED_OFF;
+                                }
+                                else if (!token.compare("s:1"))
+                                {
+                                    g_UserLED = LED_ON;
+                                }
+                                else
+                                {
+                                    printf("\r\n\r\nError! \"s:<1|0>\" comparison failed. \
+                                        We rather parsed: \"%s\"\r\n", token.c_str());
+                                }
+                            }
+                            else
+                            {
+                                printf("\r\n\r\nError! 3rd occurrence of LightControl \
+                                    message delimiter parsing failed.\r\n");
+                            }
+                        }
+                        else
+                        {
+                            printf("\r\n\r\nError! \"g:001\" comparison failed. \
+                                We rather parsed: \"%s\"\r\n", token.c_str());
+                        }
+                    }
+                    else
+                    {
+                        printf("\r\n\r\nError! 2nd occurrence of LightControl \
+                            message delimiter parsing failed.\r\n");
+                    }
+                }
+                else
+                {
+                    printf("\r\n\r\nError! \"t:lights\" comparison failed. \
+                        We rather parsed: \"%s\"\r\n", token.c_str());
+                }
+            }
+            else
+            {
+                printf("\r\n\r\nError! 1st occurrence of LightControl \
+                    message delimiter parsing failed.\r\n");
+            }
+        }
+        else if (rc < 0)
+        {
+            printf("\r\n\r\nError! m_TheSocket.recvfrom() returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
-            result = false;
+        }
+        else
+        {
+            printf("\r\n\r\nError! m_TheSocket.recvfrom() indicated :\n\t\
+                \"No data available to be received and the peer has performed an orderly shutdown.\"\n");
         }
     }
     

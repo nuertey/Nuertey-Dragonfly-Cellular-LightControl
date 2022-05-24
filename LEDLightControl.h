@@ -141,6 +141,8 @@ protected:
     [[nodiscard]] bool Send();
     [[nodiscard]] bool Receive();
     
+    void ParseAndConsumeLightControlMesage(std::string& s, const std::string& delimiter);
+    
 private:
     TransportScheme_t          m_TheTransportSchemeType;
     TransportSocket_t          m_TheTransportSocketType;
@@ -278,8 +280,6 @@ void LEDLightControl::Setup()
     // the implementation once class is tested and proven to be working
     // like the below:
     
-    // LEDLightControl::ConnectToNetworkInterface() should happen here 
-    // and should be called by the class itself hence private or protected member:
     ConnectToNetworkInterface<transport, socket>();
 }
 
@@ -678,68 +678,7 @@ bool LEDLightControl::Receive()
             std::string s(receiveBuffer, rc);
             std::string delimiter = ";";
                         
-            size_t pos = 0;
-            std::string token;
-            if ((pos = s.find(delimiter)) != std::string::npos)
-            {
-                token = s.substr(0, pos);
-                if (!token.compare("t:lights"))
-                {
-                    s.erase(0, pos + delimiter.length());
-                    
-                    if ((pos = s.find(delimiter)) != std::string::npos)
-                    {
-                        token = s.substr(0, pos);
-                        if (!token.compare("g:001")) // MY_LIGHT_CONTROL_GROUP
-                        {
-                            s.erase(0, pos + delimiter.length());
-                            
-                            if ((pos = s.find(delimiter)) != std::string::npos)
-                            {
-                                token = s.substr(0, pos);
-                                if (!token.compare("s:0"))
-                                {
-                                    g_UserLED = LED_OFF;
-                                }
-                                else if (!token.compare("s:1"))
-                                {
-                                    g_UserLED = LED_ON;
-                                }
-                                else
-                                {
-                                    printf("\r\n\r\nError! \"s:<1|0>\" comparison failed. \
-                                        We rather parsed: \"%s\"\r\n", token.c_str());
-                                }
-                            }
-                            else
-                            {
-                                printf("\r\n\r\nError! 3rd occurrence of LightControl \
-                                    message delimiter parsing failed.\r\n");
-                            }
-                        }
-                        else
-                        {
-                            printf("\r\n\r\nError! \"g:001\" comparison failed. \
-                                We rather parsed: \"%s\"\r\n", token.c_str());
-                        }
-                    }
-                    else
-                    {
-                        printf("\r\n\r\nError! 2nd occurrence of LightControl \
-                            message delimiter parsing failed.\r\n");
-                    }
-                }
-                else
-                {
-                    printf("\r\n\r\nError! \"t:lights\" comparison failed. \
-                        We rather parsed: \"%s\"\r\n", token.c_str());
-                }
-            }
-            else
-            {
-                printf("\r\n\r\nError! 1st occurrence of LightControl \
-                    message delimiter parsing failed.\r\n");
-            }
+            ParseAndConsumeLightControlMesage(s, delimiter);
         }
         else if (rc < 0)
         {
@@ -767,68 +706,7 @@ bool LEDLightControl::Receive()
             std::string s(receiveBuffer, rc);
             std::string delimiter = ";";
                         
-            size_t pos = 0;
-            std::string token;
-            if ((pos = s.find(delimiter)) != std::string::npos)
-            {
-                token = s.substr(0, pos);
-                if (!token.compare("t:lights"))
-                {
-                    s.erase(0, pos + delimiter.length());
-                    
-                    if ((pos = s.find(delimiter)) != std::string::npos)
-                    {
-                        token = s.substr(0, pos);
-                        if (!token.compare("g:001")) // MY_LIGHT_CONTROL_GROUP
-                        {
-                            s.erase(0, pos + delimiter.length());
-                            
-                            if ((pos = s.find(delimiter)) != std::string::npos)
-                            {
-                                token = s.substr(0, pos);
-                                if (!token.compare("s:0"))
-                                {
-                                    g_UserLED = LED_OFF;
-                                }
-                                else if (!token.compare("s:1"))
-                                {
-                                    g_UserLED = LED_ON;
-                                }
-                                else
-                                {
-                                    printf("\r\n\r\nError! \"s:<1|0>\" comparison failed. \
-                                        We rather parsed: \"%s\"\r\n", token.c_str());
-                                }
-                            }
-                            else
-                            {
-                                printf("\r\n\r\nError! 3rd occurrence of LightControl \
-                                    message delimiter parsing failed.\r\n");
-                            }
-                        }
-                        else
-                        {
-                            printf("\r\n\r\nError! \"g:001\" comparison failed. \
-                                We rather parsed: \"%s\"\r\n", token.c_str());
-                        }
-                    }
-                    else
-                    {
-                        printf("\r\n\r\nError! 2nd occurrence of LightControl \
-                            message delimiter parsing failed.\r\n");
-                    }
-                }
-                else
-                {
-                    printf("\r\n\r\nError! \"t:lights\" comparison failed. \
-                        We rather parsed: \"%s\"\r\n", token.c_str());
-                }
-            }
-            else
-            {
-                printf("\r\n\r\nError! 1st occurrence of LightControl \
-                    message delimiter parsing failed.\r\n");
-            }
+            ParseAndConsumeLightControlMesage(s, delimiter);
         }
         else if (rc < 0)
         {
@@ -845,4 +723,68 @@ bool LEDLightControl::Receive()
     return result;
 }
 
-
+void LEDLightControl::ParseAndConsumeLightControlMesage(std::string& s, const std::string& delimiter)
+{
+    size_t pos = 0;
+    std::string token;
+    if ((pos = s.find(delimiter)) != std::string::npos)
+    {
+        token = s.substr(0, pos);
+        if (!token.compare("t:lights"))
+        {
+            s.erase(0, pos + delimiter.length());
+            
+            if ((pos = s.find(delimiter)) != std::string::npos)
+            {
+                token = s.substr(0, pos);
+                if (!token.compare("g:001")) // MY_LIGHT_CONTROL_GROUP
+                {
+                    s.erase(0, pos + delimiter.length());
+                    
+                    if ((pos = s.find(delimiter)) != std::string::npos)
+                    {
+                        token = s.substr(0, pos);
+                        if (!token.compare("s:0"))
+                        {
+                            g_UserLED = LED_OFF;
+                        }
+                        else if (!token.compare("s:1"))
+                        {
+                            g_UserLED = LED_ON;
+                        }
+                        else
+                        {
+                            printf("\r\n\r\nError! \"s:<1|0>\" comparison failed. \
+                                We rather parsed: \"%s\"\r\n", token.c_str());
+                        }
+                    }
+                    else
+                    {
+                        printf("\r\n\r\nError! 3rd occurrence of LightControl \
+                            message delimiter parsing failed.\r\n");
+                    }
+                }
+                else
+                {
+                    printf("\r\n\r\nError! \"g:001\" comparison failed. \
+                        We rather parsed: \"%s\"\r\n", token.c_str());
+                }
+            }
+            else
+            {
+                printf("\r\n\r\nError! 2nd occurrence of LightControl \
+                    message delimiter parsing failed.\r\n");
+            }
+        }
+        else
+        {
+            printf("\r\n\r\nError! \"t:lights\" comparison failed. \
+                We rather parsed: \"%s\"\r\n", token.c_str());
+        }
+    }
+    else
+    {
+        printf("\r\n\r\nError! 1st occurrence of LightControl \
+            message delimiter parsing failed.\r\n");
+    }
+}

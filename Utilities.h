@@ -181,12 +181,6 @@ namespace Utilities
         return oss.str();
     };
 
-    template <typename E>
-    constexpr auto ToIntegral(E e) -> typename std::underlying_type<E>::type
-    {
-        return static_cast<typename std::underlying_type<E>::type>(e);
-    }
-
     const auto IsDomainNameAddress = [](const std::string & address)
     {
         bool result = false;
@@ -201,38 +195,35 @@ namespace Utilities
         return result;
     };
 
-    // Be careful about designating the return here as const. It will
-    // trap you in some sneaky behavior as a move from the std::optional
-    // will rather invoke the copy constructor without the compiler complaining.
-    const auto ResolveAddressIfDomainName = [](const std::string & address, NetworkInterface * pInterface)
+    const auto ResolveAddressIfDomainName = [](const std::string & address
+                                             , NetworkInterface * pInterface)
     {
-        std::optional<std::string> domainName(std::nullopt);
-        std::string ipAddress = address;
+        std::optional<std::string> ipAddress(std::nullopt);
 
         if (!address.empty())
         {
             if (IsDomainNameAddress(address))
             {
-                domainName.emplace(address);
+                // Note that the MBED_ASSERT macro is only available in the Debug 
+                // and Development build profiles and not in the Release build profile. 
+                MBED_ASSERT(pInterface);
+                
                 SocketAddress serverSocketAddress;
-                nsapi_size_or_error_t retVal;
 
-                // Resolve Domain Name :
-                do
+                printf("\r\nPerforming DNS lookup for : \"%s\" ...", address.c_str());
+                nsapi_error_t retVal = pInterface->gethostbyname(address.c_str(), &serverSocketAddress);
+                if (retVal < 0)
                 {
-                    printf("\r\nPerforming DNS lookup for : \"%s\" ...", address.c_str());
-                    retVal = pInterface->gethostbyname(address.c_str(), &serverSocketAddress);
-                    if (retVal < 0)
-                    {
-                        printf("\r\nError! On DNS lookup, Network returned: [%d] -> %s", retVal, ToString(retVal).c_str());
-                    }
-                }  while (retVal < 0);
+                    printf("\r\nError! On DNS lookup, Network returned: [%d] -> %s", retVal, ToString(retVal).c_str());
+                }
 
-                ipAddress = std::string(serverSocketAddress.get_ip_address());
+                // No need to do the explicit construction of std::string
+                // as we are emplace'ing:
+                ipAddress.emplace(serverSocketAddress.get_ip_address());
             }
         }
 
-        return std::make_pair(std::move(ipAddress), std::move(domainName));
+        return ipAddress;
     };
 
     template <typename T>

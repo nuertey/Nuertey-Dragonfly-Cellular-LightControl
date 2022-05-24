@@ -80,8 +80,6 @@ static constexpr int ECHO_PORT = MBED_CONF_APP_ECHO_SERVER_PORT; // Same value h
 
 using namespace std::chrono_literals;
 
-static constexpr auto LED_BLINKING_RATE = 500ms;
-
 // Intrinsically enforce our requirements with C++20 Concepts.
 template <TransportScheme_t transport, TransportSocket_t socket>
 concept IsValidTransportType = (((transport == TransportScheme_t::CELLULAR_4G_LTE)
@@ -110,7 +108,9 @@ EventQueue * g_pSharedEventQueue;
 
 class LEDLightControl
 {   
-    static constexpr uint8_t  MAXIMUM_NUMBER_OF_CONNECT_RETRIES{3};
+    static constexpr int32_t BLOCKING_SOCKET_TIMEOUT_MILLISECONDS{15000};
+
+    static constexpr auto LED_BLINKING_RATE = 500ms;
     
     static constexpr auto     STARTUP_STATUS_CHECK_DELAY    {10ms};
     static constexpr auto     CHANGE_MEASUREMENT_MODE_DELAY {50ms};
@@ -143,17 +143,28 @@ protected:
     [[nodiscard]] bool Receive();
     
 private:
-    TransportScheme_t              m_TheTransportSchemeType;
-    TransportSocket_t              m_TheTransportSocketType;
-    NetworkInterface *             m_pNetworkInterface;
-    CellularDevice *               m_pTheCellularDevice;
-    std::optional<std::string>     m_EchoServerDomainName; // Domain name might not always necessarily exist...
-    std::string                    m_EchoServerAddress;    // However IP Address always would.
-    uint16_t                       m_EchoServerPort;
-    IsOperationModeType            m_OperationMode;
-    bool                           m_IsConnected;
+    TransportScheme_t          m_TheTransportSchemeType;
+    TransportSocket_t          m_TheTransportSocketType;
+    NetworkInterface *         m_pNetworkInterface;
+    CellularDevice *           m_pTheCellularDevice;
+    std::string                m_EchoServerDomainName; // Domain name will always exist.
+    std::optional<std::string> m_EchoServerAddress;    // However IP Address might not always exist...
+    uint16_t                   m_EchoServerPort;
+    IsOperationModeType        m_OperationMode;
+    bool                       m_IsConnected;
     
-    // Conditional class members based upon configuration parsed from mbed_app.json:
+    // Conditional class members based upon configuration parsed from 
+    // mbed_app.json follow:
+    
+    // "The Socket class defines the Mbed OS Socket API and \'LOOSELY\' 
+    // follows the POSIX standard (IEEE Std 1003.1).
+    //
+    // You can use this interface when designing \'PORTABLE APPLICATION\' 
+    // interfaces that do not require specific protocol to be defined. 
+    // For example, instead of using TCPSocket* in methods, the application
+    // can use Socket* to allow either UDP or TCP to work, or even TLS."
+    //
+    // https://os.mbed.com/docs/mbed-os/v6.15/apis/socket.html 
     #if MBED_CONF_APP_SOCK_TYPE == TCP
         TCPSocket                  m_TheSocket;
         SocketAddress              m_TheSocketAddress;
@@ -173,8 +184,8 @@ private:
 // m_pNetworkInterface is deliberately 'self-initialized' by its requisite default constructor.
 // m_pTheCellularDevice is deliberately 'self-initialized' by its requisite default constructor.
 LEDLightControl::LEDLightControl()
-    : m_EchoServerDomainName(std::nullopt)
-    , m_EchoServerAddress(ECHO_HOSTNAME)
+    : m_EchoServerDomainName(ECHO_HOSTNAME)
+    , m_EchoServerAddress(std::nullopt)
     , m_EchoServerPort(ECHO_PORT) 
     , m_OperationMode(standbyMode)
     , m_IsConnected(false)
@@ -507,17 +518,31 @@ void LEDLightControl::ConnectToSocket()
         }
     }  
     
-    // TBD Nuertey Odzeyem; is this statement really necessary? Investigate
-    // Mbed OS documentation:
-    m_TheSocket.set_timeout(15000);
+    // Set timeout on blocking socket operations.
+    //
+    // Initially all sockets have unbounded timeouts. NSAPI_ERROR_WOULD_BLOCK
+    // is returned if a blocking operation takes longer than the specified timeout.
+    m_TheSocket.set_timeout(BLOCKING_SOCKET_TIMEOUT_MILLISECONDS);
     
-    // TBD Nuertey Odzeyem; resolve hostname here??? ...
-    auto [ipAddress, domainName] = Utility::ResolveAddressIfDomainName(m_EchoServerAddress, m_pNetworkInterface);
-    m_EchoServerAddress = ipAddress;
-    
-    if (domainName)
+    if (m_TheTransportSocketType != TransportSocket_t::CELLULAR_NON_IP)
     {
-        m_EchoServerDomainName = std::move(domainName);
+        auto ipAddress = Utility::ResolveAddressIfDomainName(m_EchoServerAddress
+                                                           , m_pNetworkInterface);
+        
+        if (ipAddress)
+        {
+            std::swap(m_EchoServerAddress, ipAddress);
+        }
+        else
+        {
+            printf("\r\n\r\nError! Utility::ResolveAddressIfDomainName() failed.\r\n");
+
+            // Abandon attempting to connect to the socket. Subsequent 
+            // NetworkStatusCallbacks() will dispatch the ConnectToSocket()
+            // event again should network conditions become better favorable.                
+            return; 
+        }
+        m_TheSocketAddress.set_port(m_EchoServerPort);
     }
 
     printf("\r\nConnecting to : \"%s:%d\" ...", m_EchoServerAddress.c_str(), m_EchoServerPort);

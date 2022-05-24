@@ -464,31 +464,52 @@ void LEDLightControl::ConnectToSocket()
     //
     // - Cellular Non-IP socket for which the data delivery path is decided
     //   by network's control plane CIoT optimisation setup, for the given APN.
-    if ((m_TheTransportSocketType == TransportSocket_t::TCP)
-     || (m_TheTransportSocketType == TransportSocket_t::UDP))
+    if (m_TheTransportSocketType == TransportSocket_t::TCP)
     {
         nsapi_error_t rc = m_TheSocket.open(m_pNetworkInterface);
         if (rc != NSAPI_ERROR_OK)
         {
-            printf("\r\n\r\nError! TCPSocket or UDPSocket.open() returned: \
+            printf("\r\n\r\nError! TCPSocket.open() returned: \
                 [%d] -> %s\r\n", rc, ToString(rc).c_str());
-                
+
+            // Abandon attempting to connect to the socket. Subsequent 
+            // NetworkStatusCallbacks() will dispatch the ConnectToSocket()
+            // event again should network conditions become better favorable.                
+            return;
+        }
+    }
+    else if (m_TheTransportSocketType == TransportSocket_t::UDP)
+    {
+        nsapi_error_t rc = m_TheSocket.open(m_pNetworkInterface);
+        if (rc != NSAPI_ERROR_OK)
+        {
+            printf("\r\n\r\nError! UDPSocket.open() returned: \
+                [%d] -> %s\r\n", rc, ToString(rc).c_str());
+
+            // Abandon attempting to connect to the socket. Subsequent 
+            // NetworkStatusCallbacks() will dispatch the ConnectToSocket()
+            // event again should network conditions become better favorable.                
             return;
         }
     }
     else if (m_TheTransportSocketType == TransportSocket_t::CELLULAR_NON_IP)
     {
-        nsapi_error_t rc = m_TheSocket.open(static_cast<CellularContext*>(m_pNetworkInterface));
+        nsapi_error_t rc = m_TheSocket.open(static_cast<CellularContext *>(m_pNetworkInterface));
         if (rc != NSAPI_ERROR_OK)
         {
             printf("\r\n\r\nError! CellularNonIPSocket.open() returned: \
                 [%d] -> %s\r\n", rc, ToString(rc).c_str());
-                
+
+            // Abandon attempting to connect to the socket. Subsequent 
+            // NetworkStatusCallbacks() will dispatch the ConnectToSocket()
+            // event again should network conditions become better favorable.                
             return;
         }
     }  
     
-      
+    // TBD Nuertey Odzeyem; is this statement really necessary? Investigate
+    // Mbed OS documentation:
+    m_TheSocket.set_timeout(15000);
     
     // TBD Nuertey Odzeyem; resolve hostname here??? ...
     auto [ipAddress, domainName] = Utility::ResolveAddressIfDomainName(m_EchoServerAddress, m_pNetworkInterface);
@@ -508,31 +529,13 @@ void LEDLightControl::ConnectToSocket()
     // }
     // else
     // {   
-    //     if constexpr (transport == TransportScheme_t::CELLULAR_4G_LTE) 
-    //     {
-    // 
-    //     }
-    //     else if constexpr (transport == TransportScheme_t::ETHERNET)
-    //     {
-    // 
-    //     }
-    //     else
-    //     {
-    //         // Mesh Network branch deliberately unimplemented as it is out of scope.
-    //     }
+
     // }
     
     // "Open a socket on the network interface, and create a TCP connection to mbed.org..."
     // // TBD Nuertey Odzeyem; perform socket.open() and connect() here???? Do so if it seems logical....
     // 
     // 
-    
-    // /**
-    //  * For UDP or TCP it opens a socket with the given echo server and performs an echo transaction.
-    //  * For Cellular Non-IP it opens a socket for which the data delivery path is decided
-    //  * by network's control plane CIoT optimisation setup, for the given APN.
-    //  */
-    // bool test_send_and_receive()
     
     // TBD Nuertey Odzeyem; call non-returning function ::Run() here to do the
     // actual sending and receiving if m_IsConnected is true, and forget

@@ -108,7 +108,9 @@ EventQueue * g_pSharedEventQueue;
 
 class LEDLightControl
 {   
-    static constexpr int32_t BLOCKING_SOCKET_TIMEOUT_MILLISECONDS{15000};
+    // 1 minute of failing to exchange packets with the EchoServer ought
+    // to be enough to tell us that there is something wrong with the socket.
+    static constexpr int32_t BLOCKING_SOCKET_TIMEOUT_MILLISECONDS{60000};
 
     static constexpr auto LED_BLINKING_RATE = 500ms;
     
@@ -580,7 +582,7 @@ void LEDLightControl::Run()
         {
             if (Receive())
             {
-                // Update LED here?
+                // TBD Nuertey Odzeyem; Update LED here?
                 continue;
             }
             else
@@ -601,34 +603,63 @@ void LEDLightControl::Run()
 
 bool LEDLightControl::Send()
 {
-    if constexpr (transport == TransportScheme_t::CELLULAR_4G_LTE) 
+    auto result = true;
+    
+    if (m_TheTransportSocketType != TransportSocket_t::UDP)
     {
-
-    }
-    else if constexpr (transport == TransportScheme_t::ETHERNET)
-    {
-
+        nsapi_error_t rc = m_TheSocket.send((void*) echo_string, strlen(echo_string));
+        
+        if (rc != NSAPI_ERROR_OK)
+        {
+            printf("\r\n\r\nError! m_TheSocket.send() to EchoServer returned:\
+                [%d] -> %s\n", rc, ToString(rc).c_str());
+            result = false;
+        }
     }
     else
     {
-        // Mesh Network branch deliberately unimplemented as it is out of scope.
+        nsapi_error_t rc = m_TheSocket.sendto(m_TheSocketAddress, (void*) echo_string, strlen(echo_string));
+        
+        if (rc != NSAPI_ERROR_OK)
+        {
+            printf("\r\n\r\nError! m_TheSocket.sendto() to EchoServer returned:\
+                [%d] -> %s\n", rc, ToString(rc).c_str());
+            result = false;
+        }
     }
+    
+    return result;
 }
 
 bool LEDLightControl::Receive()
 {
-    if constexpr (transport == TransportScheme_t::CELLULAR_4G_LTE) 
+    auto result = true;
+    uint8_t receive_buffer[20];
+    
+    if (m_TheTransportSocketType != TransportSocket_t::UDP)
     {
-
-    }
-    else if constexpr (transport == TransportScheme_t::ETHERNET)
-    {
-
+        nsapi_error_t rc = m_TheSocket.recv((void*)receive_buffer, sizeof(receive_buffer));
+        
+        if (rc != NSAPI_ERROR_OK)
+        {
+            printf("\r\n\r\nError! m_TheSocket.recv() from EchoServer returned:\
+                [%d] -> %s\n", rc, ToString(rc).c_str());
+            result = false;
+        }
     }
     else
     {
-        // Mesh Network branch deliberately unimplemented as it is out of scope.
+        nsapi_error_t rc = m_TheSocket.recvfrom(&m_TheSocketAddress, (void*)receive_buffer, sizeof(receive_buffer));
+        
+        if (rc != NSAPI_ERROR_OK)
+        {
+            printf("\r\n\r\nError! m_TheSocket.recvfrom() from EchoServer returned:\
+                [%d] -> %s\n", rc, ToString(rc).c_str());
+            result = false;
+        }
     }
+    
+    return result;
 }
 
 

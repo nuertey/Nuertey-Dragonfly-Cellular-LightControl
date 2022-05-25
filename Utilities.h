@@ -131,11 +131,11 @@ namespace Utilities
                 // and Development build profiles and not in the Release build profile. 
                 MBED_ASSERT(pInterface);
 
-                printf("\r\nPerforming DNS lookup for : \"%s\" ...", address.c_str());
+                printf("Performing DNS lookup for : \"%s\" ...\n", address.c_str());
                 nsapi_error_t retVal = pInterface->gethostbyname(address.c_str(), pTheSocketAddress);
                 if (retVal < 0)
                 {
-                    printf("\r\nError! On DNS lookup, Network returned: [%d] -> %s", retVal, ToString(retVal).c_str());
+                    printf("Error! On DNS lookup, Network returned: [%d] -> %s\n", retVal, ToString(retVal).c_str());
                 }
 
                 // No need to do the explicit construction of std::string

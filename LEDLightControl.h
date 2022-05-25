@@ -152,40 +152,14 @@ private:
     uint16_t                   m_EchoServerPort;
     bool                       m_IsConnected;
     
-    // Conditional class members based upon configuration parsed from 
-    // mbed_app.json follow:
-    
-    // "The Socket class defines the Mbed OS Socket API and \'LOOSELY\' 
-    // follows the POSIX standard (IEEE Std 1003.1).
+    // Portable Socket class interface for handling all the 3 possible
+    // socket types. Ergo:
     //
-    // You can use this interface when designing \'PORTABLE APPLICATION\' 
-    // interfaces that do not require specific protocol to be defined. 
-    // For example, instead of using TCPSocket* in methods, the application
-    // can use Socket* to allow either UDP or TCP to work, or even TLS."
-    //
-    // https://os.mbed.com/docs/mbed-os/v6.15/apis/socket.html
-    
-    // TBD Nuertey Odzeyem; enhance this LEDLightControl class encapsulation
-    // to, instead of the below, rather use the portable Socket class interface
-    // in handling all the 3 possible socket types. Ergo:
-    //
-    // Socket *                 m_pTheSocket;
-    // SocketAddress            m_TheSocketAddress;
-    //
-    // And then create the requisite derived socket types based on the
-    // templatized TransportSocket_t as you are already doing in the rest
-    // of the code.
-    
-    #if MBED_CONF_APP_SOCK_TYPE == NUERTEY_TCP
-        TCPSocket               m_TheSocket;
-        SocketAddress           m_TheSocketAddress;
-    #elif MBED_CONF_APP_SOCK_TYPE == NUERTEY_UDP
-        UDPSocket               m_TheSocket;
-        SocketAddress           m_TheSocketAddress;
-    #elif MBED_CONF_APP_SOCK_TYPE == NUERTEY_NONIP
-        // Send and receive 3GPP non-IP datagrams (NIDD) using the cellular IoT feature.
-        CellularNonIPSocket     m_TheSocket;
-    #endif
+    // TCP - Connection-oriented IP.
+    // UDP - Connection-less IP.
+    // CellularNonIP - 3GPP non-IP datagrams (NIDD) using the cellular IoT feature.
+    std::unique_ptr<Socket>   m_pTheSocket;
+    SocketAddress             m_TheSocketAddress;
 };
 
 // Note that:
@@ -199,13 +173,16 @@ LEDLightControl::LEDLightControl()
     , m_EchoServerAddress(std::nullopt)
     , m_EchoServerPort(ECHO_PORT) 
     , m_IsConnected(false)
-    // Deliberately letting the conditional class member variables 'self-initialize'
-    // by default-constructing. 
+    // Deliberately letting the portable socket interface variables 
+    //'self-initialize' to nullptr. 
 {
 }
 
 LEDLightControl::~LEDLightControl()
 {
+    // Note that from testing, I would not advise tracing at all, especially
+    // for an application employing socket callback interrupts. So I have
+    // disabled tracing also via the mbed_app.json configuration file.
     //trace_close(); // For the internal cellular stack I believe.
 }
 
@@ -273,7 +250,7 @@ void LEDLightControl::Setup()
     }
     
     // Asynchronously monitor for Network Status events:
-    m_pNetworkInterface->attach(callback(this, &LEDLightControl::NetworkStatusCallback));  // callback using member function
+    m_pNetworkInterface->attach(callback(this, &LEDLightControl::NetworkStatusCallback));
     
     // "Attach to network so we can get update status from the network"
     // _nw->attach(callback(this, &CellularDevice::cellular_callback));
@@ -496,10 +473,14 @@ void LEDLightControl::ConnectToSocket()
     //   by network's control plane CIoT optimisation setup, for the given APN.
     if (m_TheTransportSocketType == TransportSocket_t::TCP)
     {
-        nsapi_error_t rc = m_TheSocket.open(m_pNetworkInterface);
+        // Portable way of using the Abstract base class Socket to refer
+        // to any particular derived socket type.
+        m_pTheSocket = std::make_unique<TCPSocket>();
+        
+        nsapi_error_t rc = m_pTheSocket->open(m_pNetworkInterface);
         if (rc != NSAPI_ERROR_OK)
         {
-            printf("\r\n\r\nError! TCPSocket.open() returned: \
+            printf("Error! TCPSocket.open() returned: \
                 [%d] -> %s\r\n", rc, ToString(rc).c_str());
 
             // Abandon attempting to connect to the socket. Subsequent 
@@ -510,10 +491,12 @@ void LEDLightControl::ConnectToSocket()
     }
     else if (m_TheTransportSocketType == TransportSocket_t::UDP)
     {
-        nsapi_error_t rc = m_TheSocket.open(m_pNetworkInterface);
+        m_pTheSocket = std::make_unique<UDPSocket>();
+        
+        nsapi_error_t rc = m_pTheSocket->open(m_pNetworkInterface);
         if (rc != NSAPI_ERROR_OK)
         {
-            printf("\r\n\r\nError! UDPSocket.open() returned: \
+            printf("Error! UDPSocket.open() returned: \
                 [%d] -> %s\r\n", rc, ToString(rc).c_str());
 
             // Abandon attempting to connect to the socket. Subsequent 
@@ -524,10 +507,12 @@ void LEDLightControl::ConnectToSocket()
     }
     else if (m_TheTransportSocketType == TransportSocket_t::CELLULAR_NON_IP)
     {
-        nsapi_error_t rc = m_TheSocket.open(static_cast<CellularContext *>(m_pNetworkInterface));
+        m_pTheSocket = std::make_unique<CellularNonIPSocket>();
+        
+        nsapi_error_t rc = m_pTheSocket->open(static_cast<CellularContext *>(m_pNetworkInterface));
         if (rc != NSAPI_ERROR_OK)
         {
-            printf("\r\n\r\nError! CellularNonIPSocket.open() returned: \
+            printf("Error! CellularNonIPSocket.open() returned: \
                 [%d] -> %s\r\n", rc, ToString(rc).c_str());
 
             // Abandon attempting to connect to the socket. Subsequent 
@@ -541,7 +526,7 @@ void LEDLightControl::ConnectToSocket()
     //
     // Initially all sockets have unbounded timeouts. NSAPI_ERROR_WOULD_BLOCK
     // is returned if a blocking operation takes longer than the specified timeout.
-    m_TheSocket.set_timeout(BLOCKING_SOCKET_TIMEOUT_MILLISECONDS);
+    m_pTheSocket->set_timeout(BLOCKING_SOCKET_TIMEOUT_MILLISECONDS);
     
     if (m_TheTransportSocketType != TransportSocket_t::CELLULAR_NON_IP)
     {
@@ -555,7 +540,7 @@ void LEDLightControl::ConnectToSocket()
         }
         else
         {
-            printf("\r\n\r\nError! Utility::ResolveAddressIfDomainName() failed.\r\n");
+            printf("Error! Utility::ResolveAddressIfDomainName() failed.\r\n");
 
             // Abandon attempting to connect to the socket. Subsequent 
             // NetworkStatusCallbacks() will dispatch the ConnectToSocket()
@@ -566,14 +551,14 @@ void LEDLightControl::ConnectToSocket()
 
         if (m_TheTransportSocketType == TransportSocket_t::TCP)
         {
-            printf("\r\nConnecting to : \"%s:%d\" ...", \
+            printf("Connecting to : \"%s:%d\" ...\n", \
                 (*m_EchoServerAddress).c_str(), m_EchoServerPort);
                 
-            nsapi_error_t rc = m_TheSocket.connect(m_TheSocketAddress);
+            nsapi_error_t rc = m_pTheSocket->connect(m_TheSocketAddress);
 
             if (rc != NSAPI_ERROR_OK)
             {
-                printf("\r\n\r\nError! TCPSocket.connect() to EchoServer returned:\
+                printf("Error! TCPSocket.connect() to EchoServer returned:\
                     [%d] -> %s\n", rc, ToString(rc).c_str());
                     
                 // Abandon attempting to connect to the socket. Subsequent 
@@ -583,7 +568,7 @@ void LEDLightControl::ConnectToSocket()
             }
             else
             {   
-                printf("\r\nSuccess! Connected to EchoServer at: \"%s:%d\"", \
+                printf("Success! Connected to EchoServer at: \"%s:%d\"\n", \
                     (*m_EchoServerAddress).c_str(), m_EchoServerPort);
             }
         }
@@ -645,11 +630,11 @@ bool LEDLightControl::Send()
     
     if (m_TheTransportSocketType != TransportSocket_t::UDP)
     {
-        nsapi_error_t rc = m_TheSocket.send(rawBuffer, lengthWritten);
+        nsapi_error_t rc = m_pTheSocket->send(rawBuffer, lengthWritten);
         
         if (rc != NSAPI_ERROR_OK)
         {
-            printf("\r\n\r\nError! m_TheSocket.send() to EchoServer returned:\
+            printf("Error! m_pTheSocket->send() to EchoServer returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
         }
         else
@@ -659,11 +644,11 @@ bool LEDLightControl::Send()
     }
     else
     {
-        nsapi_error_t rc = m_TheSocket.sendto(m_TheSocketAddress, rawBuffer, lengthWritten);
+        nsapi_error_t rc = m_pTheSocket->sendto(m_TheSocketAddress, rawBuffer, lengthWritten);
         
         if (rc != NSAPI_ERROR_OK)
         {
-            printf("\r\n\r\nError! m_TheSocket.sendto() to EchoServer returned:\
+            printf("Error! m_pTheSocket->sendto() to EchoServer returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
         }
         else
@@ -684,7 +669,7 @@ bool LEDLightControl::Receive()
     
     if (m_TheTransportSocketType != TransportSocket_t::UDP)
     {
-        nsapi_size_or_error_t rc = m_TheSocket.recv(receiveBuffer, 
+        nsapi_size_or_error_t rc = m_pTheSocket->recv(receiveBuffer, 
                                                     sizeof(receiveBuffer) - 1);
         
         
@@ -701,18 +686,19 @@ bool LEDLightControl::Receive()
         }
         else if (rc < 0)
         {
-            printf("\r\n\r\nError! m_TheSocket.recv() returned:\
+            printf("Error! m_pTheSocket->recv() returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
         }
         else
         {
-            printf("\r\n\r\nError! m_TheSocket.recv() indicated :\n\t\
-                \"No data available to be received and the peer has performed an orderly shutdown.\"\n");
+            printf("Error! m_pTheSocket->recv() indicated :\n\t\
+                \"No data available to be received and the peer has \
+                performed an orderly shutdown.\"\n");
         }
     }
     else
     {
-        nsapi_size_or_error_t rc = m_TheSocket.recvfrom(&m_TheSocketAddress, 
+        nsapi_size_or_error_t rc = m_pTheSocket->recvfrom(&m_TheSocketAddress, 
                                                         receiveBuffer, 
                                                         sizeof(receiveBuffer) - 1);
         
@@ -729,20 +715,22 @@ bool LEDLightControl::Receive()
         }
         else if (rc < 0)
         {
-            printf("\r\n\r\nError! m_TheSocket.recvfrom() returned:\
+            printf("Error! m_pTheSocket->recvfrom() returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
         }
         else
         {
-            printf("\r\n\r\nError! m_TheSocket.recvfrom() indicated :\n\t\
-                \"No data available to be received and the peer has performed an orderly shutdown.\"\n");
+            printf("Error! m_pTheSocket->recvfrom() indicated :\n\t\
+                \"No data available to be received and the peer has \
+                performed an orderly shutdown.\"\n");
         }
     }
     
     return result;
 }
 
-void LEDLightControl::ParseAndConsumeLightControlMesage(std::string& s, const std::string& delimiter)
+void LEDLightControl::ParseAndConsumeLightControlMesage(std::string& s, 
+                                           const std::string& delimiter)
 {
     size_t pos = 0;
     std::string token;
@@ -773,37 +761,37 @@ void LEDLightControl::ParseAndConsumeLightControlMesage(std::string& s, const st
                         }
                         else
                         {
-                            printf("\r\n\r\nError! \"s:<1|0>\" comparison failed. \
+                            printf("Error! \"s:<1|0>\" comparison failed. \
                                 We rather parsed: \"%s\"\r\n", token.c_str());
                         }
                     }
                     else
                     {
-                        printf("\r\n\r\nError! 3rd occurrence of LightControl \
+                        printf("Error! 3rd occurrence of LightControl \
                             message delimiter parsing failed.\r\n");
                     }
                 }
                 else
                 {
-                    printf("\r\n\r\nError! \"g:001\" comparison failed. \
+                    printf("Error! \"g:001\" comparison failed. \
                         We rather parsed: \"%s\"\r\n", token.c_str());
                 }
             }
             else
             {
-                printf("\r\n\r\nError! 2nd occurrence of LightControl \
+                printf("Error! 2nd occurrence of LightControl \
                     message delimiter parsing failed.\r\n");
             }
         }
         else
         {
-            printf("\r\n\r\nError! \"t:lights\" comparison failed. \
+            printf("Error! \"t:lights\" comparison failed. \
                 We rather parsed: \"%s\"\r\n", token.c_str());
         }
     }
     else
     {
-        printf("\r\n\r\nError! 1st occurrence of LightControl \
+        printf("Error! 1st occurrence of LightControl \
             message delimiter parsing failed.\r\n");
     }
 }

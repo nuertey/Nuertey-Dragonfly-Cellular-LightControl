@@ -63,18 +63,11 @@
 ***********************************************************************/
 #include "LEDLightControl.h"
 
-// TBD Nuertey Odzeyem; make these potential two defines below reflect the
-// actual contents of the configuration options defined in the mbed_app.json:
+// Set the board that you want to target/test here:
+//MCUTarget_t g_MCUTarget{MCUTarget_t::MTS_DRAGONFLY_L471QG};
+MCUTarget_t g_MCUTarget{MCUTarget_t::NUCLEO_F767ZI};
 
-// Primary usecase:
-//#define NUERTEY_MTS_DRAGONFLY_L471QG 
-
-// To allow for potential debug testing on the only MCU that I do have available:
-#define NUERTEY_NUCLEO_F767ZI
-
-// Do NOT use std::unique_ptr<> as we must NOT delete the shared
-// event queue pointer (a singleton) at any time. 
-LEDLightControl * g_pLEDLightControl;
+std::unique_ptr<LEDLightControl> g_pLEDLightControl = std::make_unique<LEDLightControl>();
 
 // Alternate to the above global variable approach, would be to use a
 // local shared_ptr variable within main() as elucidated below, but perhaps
@@ -103,31 +96,27 @@ int main()
 #ifdef MBED_MAJOR_VERSION
     printf("Mbed OS version: %d.%d.%d\n\n", MBED_MAJOR_VERSION, MBED_MINOR_VERSION, MBED_PATCH_VERSION);
 #endif
-    printf("\n\nBuilt: %s, %s\n", __DATE__, __TIME__);
+    printf("Built: %s, %s\n\n", __DATE__, __TIME__);
 #ifdef MBED_CONF_NSAPI_DEFAULT_CELLULAR_PLMN
-    printf("\n\n[MAIN], CELLULAR_PLMN: %s\n", (MBED_CONF_NSAPI_DEFAULT_CELLULAR_PLMN ? MBED_CONF_NSAPI_DEFAULT_CELLULAR_PLMN : "NULL"));
+    printf("[MAIN], CELLULAR_PLMN: %s\n\n", (MBED_CONF_NSAPI_DEFAULT_CELLULAR_PLMN ? MBED_CONF_NSAPI_DEFAULT_CELLULAR_PLMN : "NULL"));
 #endif
 
     // Note that the MBED_ASSERT macro is only available in the Debug 
     // and Development build profiles and not in the Release build profile. 
     MBED_ASSERT(g_pLEDLightControl);
 
-    // Here is the 'old-school way' of detecting (and changing behaviors based upon)
-    // target type. My goal is to rather prefer (from hereon) elegant C++20 Concepts via the User's
-    // own-specified template parameters in the Application (main.cpp) and whichever
-    // intrinsic configurations were already parsed from the mbed_app.json that the 
-    // User(s) themselves have already specified. Naturally and logically, the mbed_app.json
-    // version will change based upon whether the to-be-tested target is MTS_DRAGONFLY_L471QG or
-    // NUCLEO_F767ZI. My NUCLEO_F767ZI of course lacking the cellular shield.
-#ifdef NUERTEY_MTS_DRAGONFLY_L471QG
-    // This call will never return as it encapsulates an EventQueue's
-    // ::dispatch_forever() method.
-    g_pLEDLightControl->Setup<TransportScheme_t::CELLULAR_4G_LTE, TransportSocket_t::TCP>();
-#elseif NUERTEY_NUCLEO_F767ZI
-    // This call will never return as it encapsulates an EventQueue's
-    // ::dispatch_forever() method.
-    g_pLEDLightControl->Setup<TransportScheme_t::ETHERNET, TransportSocket_t::TCP>();
-#endif
+    if (g_MCUTarget == MCUTarget_t::MTS_DRAGONFLY_L471QG)
+    {
+        // This call will never return as it encapsulates an EventQueue's
+        // ::dispatch_forever() method.
+        g_pLEDLightControl->Setup<TransportScheme_t::CELLULAR_4G_LTE, TransportSocket_t::TCP>();
+    }
+    else if (g_MCUTarget == MCUTarget_t::NUCLEO_F767ZI)
+    {
+        // This call will never return as it encapsulates an EventQueue's
+        // ::dispatch_forever() method.
+        g_pLEDLightControl->Setup<TransportScheme_t::ETHERNET, TransportSocket_t::TCP>();
+    }
      
     // As per design, we will NEVER get to this statement. Great! Helps with debug...
     printf("\r\n\r\nNuertey-Dragonfly-Cellular-LightControl Application - Exiting.\r\n\r\n");

@@ -48,10 +48,15 @@
 #define LED_ON  1
 #define LED_OFF 0
 
-// Choice of socket type configuration parsed from mbed_app.json:
-#define NUERTEY_UDP 0
-#define NUERTEY_TCP 1
-#define NUERTEY_NONIP 2
+enum class MCUTarget_t : uint8_t
+{
+    // Primary usecase:
+    MTS_DRAGONFLY_L471QG,
+    
+    // To allow for potential debug testing
+    // on the only MCU that I do have available:
+    NUCLEO_F767ZI
+};
 
 enum class TransportScheme_t : uint8_t
 {
@@ -67,15 +72,6 @@ enum class TransportSocket_t : uint8_t
     UDP,
     CELLULAR_NON_IP
 };
-
-// TBD Nuertey Odzeyem; I dont think these are any longer needed. Remove if confirmed.
-//#if MBED_CONF_APP_SOCK_TYPE == NUERTEY_TCP
-//    static constexpr char SOCKET_TYPE[] = "TCP";
-//#elif MBED_CONF_APP_SOCK_TYPE == NUERTEY_UDP
-//    static constexpr char SOCKET_TYPE[] = "UDP";
-//#elif MBED_CONF_APP_SOCK_TYPE == NUERTEY_NONIP
-//    static constexpr char SOCKET_TYPE[] = "CellularNonIP";
-//#endif
 
 static constexpr char ECHO_HOSTNAME[] = MBED_CONF_APP_ECHO_SERVER_HOSTNAME;
 static constexpr int ECHO_PORT = MBED_CONF_APP_ECHO_SERVER_PORT; // Same value holds for TCP and UDP.
@@ -104,10 +100,8 @@ bool       g_UserLEDState{false};  // Logically, the board will bootup with the 
 // but when safely translated into, say, an EventQueue context). Essentially,
 // ensure our output does not come out garbled on the serial terminal.
 PlatformMutex g_STDIOMutex; 
-
-// Do NOT use std::unique_ptr<> as we must NOT delete the shared
-// event queue pointer (a singleton) at any time.       
-EventQueue * g_pSharedEventQueue;
+      
+std::unique_ptr<EventQueue> g_pSharedEventQueue = std::make_unique<EventQueue>();
 
 class LEDLightControl
 {   
@@ -212,15 +206,17 @@ LEDLightControl::LEDLightControl()
 
 LEDLightControl::~LEDLightControl()
 {
-    trace_close(); // For the internal cellular stack I believe.
+    //trace_close(); // For the internal cellular stack I believe.
 }
 
 template <TransportScheme_t transport, TransportSocket_t socket>
     requires IsValidTransportType<transport, socket>
 void LEDLightControl::Setup()
 {
+    printf("Running LEDLightControl::Setup() ... \r\n");
+    
     randLIB_seed_random();
-    trace_open(); // For the internal cellular stack I believe.
+    //trace_open(); // For the internal cellular stack I believe.
     
     if constexpr (transport == TransportScheme_t::CELLULAR_4G_LTE) 
     {
@@ -378,7 +374,7 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
             auto event1 = make_user_allocated_event(this, &LEDLightControl::ConnectToSocket);
         
             // bind & post
-            event1.call_on(g_pSharedEventQueue);
+            event1.call_on(g_pSharedEventQueue.get());
             
             // Note that the EventQueue has no concept of event priority. 
             // If you schedule events to run at the same time, the order in
@@ -457,7 +453,7 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
                     auto event1 = make_user_allocated_event(this, &LEDLightControl::ConnectToSocket);
                 
                     // bind & post
-                    event1.call_on(g_pSharedEventQueue);
+                    event1.call_on(g_pSharedEventQueue.get());
                     
                     // Note that the EventQueue has no concept of event priority. 
                     // If you schedule events to run at the same time, the order in

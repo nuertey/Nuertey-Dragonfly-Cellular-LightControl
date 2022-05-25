@@ -31,6 +31,7 @@
 #include "mbed.h"
 #include "mbed_assert.h"
 #include "mbed_events.h"
+#include "mbed_trace.h"
 #include "randLIB.h"
 
 //#include "common_functions.h"
@@ -211,6 +212,7 @@ LEDLightControl::LEDLightControl()
 
 LEDLightControl::~LEDLightControl()
 {
+    trace_close(); // For the internal cellular stack I believe.
 }
 
 template <TransportScheme_t transport, TransportSocket_t socket>
@@ -218,6 +220,7 @@ template <TransportScheme_t transport, TransportSocket_t socket>
 void LEDLightControl::Setup()
 {
     randLIB_seed_random();
+    trace_open(); // For the internal cellular stack I believe.
     
     if constexpr (transport == TransportScheme_t::CELLULAR_4G_LTE) 
     {
@@ -546,7 +549,7 @@ void LEDLightControl::ConnectToSocket()
     
     if (m_TheTransportSocketType != TransportSocket_t::CELLULAR_NON_IP)
     {
-        auto ipAddress = Utilities::ResolveAddressIfDomainName(m_EchoServerAddress
+        auto ipAddress = Utilities::ResolveAddressIfDomainName(*m_EchoServerAddress
                                                              , m_pNetworkInterface
                                                              , &m_TheSocketAddress);
         

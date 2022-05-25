@@ -17,8 +17,10 @@ ARM Mbed application that blinks LED1 (D3, PA_0) on MultiTech Dragonfly™ Nano 
 [mbed] Global config:
 GCC_ARM_PATH=/.../gcc-arm-none-eabi-10.3-2021.10/bin
 
-[mbed] Local config (/.../Nuertey-Dragonfly-Cellular-LightControl):
-No local configuration is set
+[mbed] Local config (/.../Workspace/Nuertey-Dragonfly-Cellular-LightControl):
+TARGET=nucleo_f767zi
+TOOLCHAIN=GCC_ARM
+
 
 (py37-venv) nuertey@nuertey-PC:/.../Nuertey-Dragonfly-Cellular-LightControl$ mbed ls
 
@@ -33,42 +35,51 @@ Nuertey-Dragonfly-Cellular-LightControl ( revision in the current branch)
 
 ```console
 ...
-Compile [ 99.9%]: mbed_crc_api.c
-Compile [100.0%]: stm32f7xx_hal_smbus.c
-Compile [100.0%]: gpio_api.c
-Link: Nuertey-LDESeries-Mbed
-Elf2Bin: Nuertey-LDESeries-Mbed
-| Module               |           .text |       .data |          .bss |
-|----------------------|-----------------|-------------|---------------|
-| NuerteyNTPClient.o   |     4042(+4042) |       4(+4) |     101(+101) |
-| Utilities.o          |     9592(+9592) |       4(+4) |     449(+449) |
-| [fill]               |       308(+308) |     21(+21) |       82(+82) |
-| [lib]/c.a            |   81456(+81456) | 2574(+2574) |       97(+97) |
-| [lib]/gcc.a          |     7416(+7416) |       0(+0) |         0(+0) |
-| [lib]/m.a            |       264(+264) |       0(+0) |         0(+0) |
-| [lib]/misc           |       188(+188) |       4(+4) |       28(+28) |
-| [lib]/nosys.a        |         32(+32) |       0(+0) |         0(+0) |
-| [lib]/stdc++.a       | 174244(+174244) |   145(+145) |   5720(+5720) |
-| main.o               |     3726(+3726) |       4(+4) |     261(+261) |
-| mbed-os/cmsis        |     9890(+9890) |   168(+168) | 14400(+14400) |
-| mbed-os/connectivity |   54186(+54186) |   103(+103) | 24059(+24059) |
-| mbed-os/drivers      |     1146(+1146) |       0(+0) |   1852(+1852) |
-| mbed-os/events       |     1776(+1776) |       0(+0) |   3104(+3104) |
-| mbed-os/hal          |     1528(+1528) |       8(+8) |     114(+114) |
-| mbed-os/platform     |     7166(+7166) |   340(+340) |     493(+493) |
-| mbed-os/rtos         |     1280(+1280) |       0(+0) |         8(+8) |
-| mbed-os/targets      |   17476(+17476) |       9(+9) |   1352(+1352) |
-| Subtotals            | 375716(+375716) | 3384(+3384) | 52120(+52120) |
-Total Static RAM memory (data + bss): 55504(+55504) bytes
-Total Flash memory (text + data): 379100(+379100) bytes
+Compile [ 99.9%]: sleep.c
+Compile [100.0%]: stm32f7xx_hal_smartcard.c
+Link: Nuertey-Dragonfly-Cellular-LightControl
+Elf2Bin: Nuertey-Dragonfly-Cellular-LightControl
+| Module               |         .text |       .data |          .bss |
+|----------------------|---------------|-------------|---------------|
+| [fill]               |     116(+116) |       3(+3) |       27(+27) |
+| [lib]/c.a            |   8840(+8840) | 2108(+2108) |       58(+58) |
+| [lib]/gcc.a          |   4740(+4740) |       0(+0) |         0(+0) |
+| [lib]/misc           |     188(+188) |       4(+4) |       28(+28) |
+| [lib]/nosys.a        |       32(+32) |       0(+0) |         0(+0) |
+| [lib]/stdc++.a       |   5196(+5196) |       8(+8) |       44(+44) |
+| main.o               |   1642(+1642) |       0(+0) |     128(+128) |
+| mbed-os/cmsis        |   9420(+9420) |   168(+168) | 14400(+14400) |
+| mbed-os/connectivity |   2516(+2516) |       0(+0) | 12796(+12796) |
+| mbed-os/drivers      |     194(+194) |       0(+0) |         0(+0) |
+| mbed-os/events       |   1520(+1520) |       0(+0) |   3104(+3104) |
+| mbed-os/hal          |   1528(+1528) |       8(+8) |     114(+114) |
+| mbed-os/platform     |   7116(+7116) |   324(+324) |     433(+433) |
+| mbed-os/rtos         |   1174(+1174) |       0(+0) |         8(+8) |
+| mbed-os/targets      | 13650(+13650) |       9(+9) |   1316(+1316) |
+| Subtotals            | 57872(+57872) | 2632(+2632) | 32456(+32456) |
+Total Static RAM memory (data + bss): 35088(+35088) bytes
+Total Flash memory (text + data): 60504(+60504) bytes
 
-Image: ./BUILD/NUCLEO_F767ZI/GCC_ARM-MY_PROFILE/Nuertey-LDESeries-Mbed.bin
+Image: ./BUILD/NUCLEO_F767ZI/GCC_ARM-MY_PROFILE/Nuertey-Dragonfly-Cellular-LightControl.bin
+
 
 ```
 
 ## Tested Target (and Peripheral):
 
-Lacking an actual LDE Series pressure sensor on my workbench for testing, I am left to appeal to you OEMs or better-equipped IoT hobbyists out there. If you have a spare LDE Series pressure sensor dev board that can be connected to my STM32F767-ZI [Nucleo-144], kindly send me an email at nuertey_odzeyem@hotmail.com 
+Lacking an actual MultiTech Dragonfly Nano dev board and associated cellular modem, SIM Card, etc., on my workbench for testing, I reconfigured and built the same Nuertey-Dragonfly-Cellular-LightControl application for my NUCLEO_F767ZI board and tested it via Ethernet transport protocol and with TCP sockets. Relevant application code segment like so:
+
+```c++
+#ifdef NUERTEY_MTS_DRAGONFLY_L471QG
+    // This call will never return as it encapsulates an EventQueue's
+    // ::dispatch_forever() method.
+    g_pLEDLightControl->Setup<TransportScheme_t::CELLULAR_4G_LTE, TransportSocket_t::TCP>();
+#elseif NUERTEY_NUCLEO_F767ZI
+    // This call will never return as it encapsulates an EventQueue's
+    // ::dispatch_forever() method.
+    g_pLEDLightControl->Setup<TransportScheme_t::ETHERNET, TransportSocket_t::TCP>();
+#endif
+```
 
 
 ## License

@@ -106,6 +106,12 @@ PlatformMutex g_STDIOMutex;
 // that it will only accept user allocated events.
 static EventQueue g_SharedEventQueue(0);
 
+// Forward declarations:
+class LEDLightControl;
+class std::shared_ptr<LEDLightControl>;
+
+extern std::shared_ptr<LEDLightControl> g_pLEDLightControlManager;
+
 // Since we are going to be invoking NetworkStatusCallbacks on, ostensibly,
 // the same instance of LEDLightControl, leverage std::enable_shared_from_this.
 //
@@ -130,7 +136,7 @@ public:
 
     virtual ~LEDLightControl();
 
-    LEDLightControl * GetOriginalPointer(){ return (shared_from_this()).get();}
+    //LEDLightControl * GetOriginalPointer(){ return (shared_from_this()).get();}
 
     template <TransportScheme_t transport, TransportSocket_t socket>
         requires IsValidTransportType<transport, socket>
@@ -353,7 +359,10 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
             // Post the asynchronously notified network status change on the shared event
             // queue so that its actions can be scheduled and complete in synchronous
             // thread mode instead of in interrupt (i.e. callback) mode.
-            auto event1 = make_user_allocated_event(GetOriginalPointer(), 
+//            auto event1 = make_user_allocated_event(GetOriginalPointer(), 
+//                                                    &LEDLightControl::ConnectToSocket);
+
+            auto event1 = make_user_allocated_event(g_pLEDLightControlManager.get(), 
                                                     &LEDLightControl::ConnectToSocket);
         
             // bind & post
@@ -363,7 +372,9 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
             // If you schedule events to run at the same time, the order in
             // which the events run relative to one another is undefined. 
             // The EventQueue only schedules events based on time.
-            
+            //g_STDIOMutex.lock();
+            //printf("Running Global Up::End ... \r\n");
+            //g_STDIOMutex.unlock();
             break;
         }
         case NSAPI_STATUS_DISCONNECTED:
@@ -433,11 +444,11 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
                     // Post the asynchronously notified network status change on the shared event
                     // queue so that its actions can be scheduled and complete in synchronous
                     // thread mode instead of in interrupt (callback) mode.
-                    auto event1 = make_user_allocated_event(GetOriginalPointer(), 
-                                                            &LEDLightControl::ConnectToSocket);
-                
-                    // bind & post
-                    event1.call_on(&g_SharedEventQueue);
+                    //auto event1 = make_user_allocated_event(GetOriginalPointer(), 
+                    //                                        &LEDLightControl::ConnectToSocket);
+                    //
+                    //// bind & post
+                    //event1.call_on(&g_SharedEventQueue);
                     
                     // Note that the EventQueue has no concept of event priority. 
                     // If you schedule events to run at the same time, the order in
@@ -463,6 +474,8 @@ void LEDLightControl::ConnectToSocket()
     // Stringently manage our object lifetime even through callbacks, 
     // with the appropriate C++ lambda captures on shared_ptr to self.
     auto self(shared_from_this());
+    
+    printf("Running LEDLightControl::ConnectToSocket() ... \r\n");
     
     // Show the particular NetworkInterface addresses to encourage Debug. 
     // Don't forget that this class object is being designed to handle 

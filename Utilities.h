@@ -77,6 +77,8 @@ namespace Utilities
 {
     const auto GetNetworkInterfaceProfile = [](NetworkInterface * pInterface)
     {
+        printf("Running GetNetworkInterfaceProfile() lambda... \r\n");
+        
         std::optional<const char *> ipv6_link_local(std::nullopt);
         std::optional<const char *> ip(std::nullopt);
         std::optional<const char *> netmask(std::nullopt);

@@ -29,7 +29,7 @@
             "platform.stdio-convert-newlines": true,
             "mbed-trace.enable": 0,
             "rtos.main-thread-stack-size": 4096,
-            "lwip.tcpip-thread-stacksize": 8192
+            "lwip.tcpip-thread-stacksize": 24576
         }
     }
 }

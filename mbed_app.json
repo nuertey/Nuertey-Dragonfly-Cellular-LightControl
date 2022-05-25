@@ -18,9 +18,6 @@
             "macro_name": "MBED_TRACE_MAX_LEVEL",
             "value": "TRACE_LEVEL_DEBUG"
         },
-        "main-stack-size": {
-            "value": 12288
-        },
         "network-interface":{
             "help": "options are ETHERNET, WIFI_ESP8266, WIFI_ODIN, WIFI_RTW, MESH_LOWPAN_ND, MESH_THREAD, CELLULAR_ONBOARD",
             "value": "ETHERNET"
@@ -30,7 +27,9 @@
         "*": {
             "platform.stdio-baud-rate": 9600,
             "platform.stdio-convert-newlines": true,
-            "mbed-trace.enable": 0
+            "mbed-trace.enable": 0,
+            "rtos.main-thread-stack-size": 4096,
+            "lwip.tcpip-thread-stacksize": 8192
         }
     }
 }

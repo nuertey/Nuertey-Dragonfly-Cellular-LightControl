@@ -162,19 +162,11 @@ private:
     SocketAddress             m_TheSocketAddress;
 };
 
-// Note that:
-//
-// m_TheTransportSchemeType is deliberately 'self-initialized' by its enum composition.
-// m_TheTransportSocketType is deliberately 'self-initialized' by its enum composition.
-// m_pNetworkInterface is deliberately 'self-initialized' by its requisite default constructor.
-// m_pTheCellularDevice is deliberately 'self-initialized' by its requisite default constructor.
 LEDLightControl::LEDLightControl()
     : m_EchoServerDomainName(ECHO_HOSTNAME)
     , m_EchoServerAddress(std::nullopt)
     , m_EchoServerPort(ECHO_PORT) 
     , m_IsConnected(false)
-    // Deliberately letting the portable socket interface variables 
-    //'self-initialize' to nullptr. 
 {
 }
 

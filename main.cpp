@@ -67,29 +67,6 @@
 //MCUTarget_t g_MCUTarget{MCUTarget_t::MTS_DRAGONFLY_L471QG};
 MCUTarget_t g_MCUTarget{MCUTarget_t::NUCLEO_F767ZI};
 
-std::unique_ptr<LEDLightControl> g_pLEDLightControl = std::make_unique<LEDLightControl>();
-
-// Alternate to the above global variable approach, would be to use a
-// local shared_ptr variable within main() as elucidated below, but perhaps
-// such an approach might be overkill on Embedded, perhaps:
-//
-    // "Also, always ensure to assign the shared_ptr--which must of necessity
-    // be declared as inheriting from:
-    //
-    // LEDLightControl : public std::enable_shared_from_this<LEDLightControl>
-    //
-    // --to a temporary otherwise it will run out of scope and the socket(s)
-    // will segfault with:
-    //
-    // [WARN] Error in reading from TCP socket connection:
-    // 127.0.0.1:5000
-    // Value := "Code: 125
-    //  Category: system
-    //  Message: Operation canceled
-    //
-    //auto theSessionManager = std::make_shared<LEDLightControl>();
-    //theSessionManager->Setup();"
-
 int main()
 {
     printf("\r\n\r\nNuertey-Dragonfly-Cellular-LightControl Application - Beginning... \r\n\r\n");
@@ -101,21 +78,19 @@ int main()
     printf("[MAIN], CELLULAR_PLMN: %s\n\n", (MBED_CONF_NSAPI_DEFAULT_CELLULAR_PLMN ? MBED_CONF_NSAPI_DEFAULT_CELLULAR_PLMN : "NULL"));
 #endif
 
-    // Note that the MBED_ASSERT macro is only available in the Debug 
-    // and Development build profiles and not in the Release build profile. 
-    MBED_ASSERT(g_pLEDLightControl);
-
+    auto pLEDLightControlManager = std::make_shared<LEDLightControl>();
+        
     if (g_MCUTarget == MCUTarget_t::MTS_DRAGONFLY_L471QG)
     {
         // This call will never return as it encapsulates an EventQueue's
         // ::dispatch_forever() method.
-        g_pLEDLightControl->Setup<TransportScheme_t::CELLULAR_4G_LTE, TransportSocket_t::TCP>();
+        pLEDLightControlManager->Setup<TransportScheme_t::CELLULAR_4G_LTE, TransportSocket_t::TCP>();
     }
     else if (g_MCUTarget == MCUTarget_t::NUCLEO_F767ZI)
     {
         // This call will never return as it encapsulates an EventQueue's
         // ::dispatch_forever() method.
-        g_pLEDLightControl->Setup<TransportScheme_t::ETHERNET, TransportSocket_t::TCP>();
+        pLEDLightControlManager->Setup<TransportScheme_t::ETHERNET, TransportSocket_t::TCP>();
     }
      
     // As per design, we will NEVER get to this statement. Great! Helps with debug...

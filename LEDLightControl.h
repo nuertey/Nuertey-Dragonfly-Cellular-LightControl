@@ -100,10 +100,20 @@ bool       g_UserLEDState{false};  // Logically, the board will bootup with the 
 // but when safely translated into, say, an EventQueue context). Essentially,
 // ensure our output does not come out garbled on the serial terminal.
 PlatformMutex g_STDIOMutex; 
-      
-std::unique_ptr<EventQueue> g_pSharedEventQueue = std::make_unique<EventQueue>();
 
-class LEDLightControl
+// Use static EventQueue to prevent your program from failing due to 
+// queue memory exhaustion or to prevent dynamic memory allocation. Note
+// that it will only accept user allocated events.
+static EventQueue g_SharedEventQueue(0);
+
+// Since we are going to be invoking NetworkStatusCallbacks on, ostensibly,
+// the same instance of LEDLightControl, leverage std::enable_shared_from_this.
+//
+// "std::enable_shared_from_this allows an object t that is currently 
+// managed by a std::shared_ptr named pt to safely generate additional
+// std::shared_ptr instances pt1, pt2, ... that all share ownership of t
+// with pt. "
+class LEDLightControl : public std::enable_shared_from_this<LEDLightControl>
 {   
     // 1 minute of failing to exchange packets with the EchoServer ought
     // to be enough to tell us that there is something wrong with the socket.
@@ -119,6 +129,8 @@ public:
     LEDLightControl& operator=(const LEDLightControl&) = delete;
 
     virtual ~LEDLightControl();
+
+    LEDLightControl * GetOriginalPointer(){ return (shared_from_this()).get();}
 
     template <TransportScheme_t transport, TransportSocket_t socket>
         requires IsValidTransportType<transport, socket>
@@ -175,7 +187,7 @@ LEDLightControl::~LEDLightControl()
     // Proper housekeeping though probably overkill.
     [[maybe_unused]] auto unused_return_1 = m_pTheSocket->close();  
     [[maybe_unused]] auto unused_return_2 = m_pNetworkInterface->disconnect();
-    g_pSharedEventQueue->break_dispatch();
+    g_SharedEventQueue.break_dispatch();
     
     // Note that from testing, I would not advise tracing at all, especially
     // for an application employing socket callback interrupts. So I have
@@ -307,19 +319,15 @@ void LEDLightControl::ConnectToNetworkInterface()
     
     // We will never return from the call below, as events are executed by 
     // the dispatch_forever method.
-    if (g_pSharedEventQueue)
-    {
-        g_pSharedEventQueue->dispatch_forever();
-    }
-    else
-    {
-        assert(((void)"Such a thing ought to never happen but unfortunately (whom knows why?), g_pSharedEventQueue is nullptr!!", \
-            (g_pSharedEventQueue != nullptr)));
-    }
+    g_SharedEventQueue.dispatch_forever();
 }
 
 void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t parameterPointerData)
 {
+    // Stringently manage our object lifetime even through callbacks, 
+    // with the appropriate C++ lambda captures on shared_ptr to self.
+    auto self(shared_from_this());
+    
     // TBD Nuertey Odzeyem; verify with testing whether this assertion 
     // is needed, and if it is here, will it negatively affect the "workings"
     // of the Cellular network.
@@ -345,10 +353,11 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
             // Post the asynchronously notified network status change on the shared event
             // queue so that its actions can be scheduled and complete in synchronous
             // thread mode instead of in interrupt (i.e. callback) mode.
-            auto event1 = make_user_allocated_event(this, &LEDLightControl::ConnectToSocket);
+            auto event1 = make_user_allocated_event(GetOriginalPointer(), 
+                                                    &LEDLightControl::ConnectToSocket);
         
             // bind & post
-            event1.call_on(g_pSharedEventQueue.get());
+            event1.call_on(&g_SharedEventQueue);
             
             // Note that the EventQueue has no concept of event priority. 
             // If you schedule events to run at the same time, the order in
@@ -424,10 +433,11 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
                     // Post the asynchronously notified network status change on the shared event
                     // queue so that its actions can be scheduled and complete in synchronous
                     // thread mode instead of in interrupt (callback) mode.
-                    auto event1 = make_user_allocated_event(this, &LEDLightControl::ConnectToSocket);
+                    auto event1 = make_user_allocated_event(GetOriginalPointer(), 
+                                                            &LEDLightControl::ConnectToSocket);
                 
                     // bind & post
-                    event1.call_on(g_pSharedEventQueue.get());
+                    event1.call_on(&g_SharedEventQueue);
                     
                     // Note that the EventQueue has no concept of event priority. 
                     // If you schedule events to run at the same time, the order in
@@ -450,6 +460,10 @@ void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t 
 
 void LEDLightControl::ConnectToSocket()
 {
+    // Stringently manage our object lifetime even through callbacks, 
+    // with the appropriate C++ lambda captures on shared_ptr to self.
+    auto self(shared_from_this());
+    
     // Show the particular NetworkInterface addresses to encourage Debug. 
     // Don't forget that this class object is being designed to handle 
     // several NetworkInterfaces--primarily Cellular, yes?, but also Ethernet
@@ -578,6 +592,10 @@ void LEDLightControl::ConnectToSocket()
 
 void LEDLightControl::Run()
 {
+    // Stringently manage our object lifetime even through callbacks, 
+    // with the appropriate C++ lambda captures on shared_ptr to self.
+    auto self(shared_from_this());
+    
     while (m_IsConnected)
     {
         if (Send())
@@ -604,6 +622,10 @@ void LEDLightControl::Run()
 
 bool LEDLightControl::Send()
 {
+    // Stringently manage our object lifetime even through callbacks, 
+    // with the appropriate C++ lambda captures on shared_ptr to self.
+    auto self(shared_from_this());
+    
     auto result = false;
     char rawBuffer[STANDARD_BUFFER_SIZE];
     int lengthWritten{0};    
@@ -661,6 +683,10 @@ bool LEDLightControl::Send()
 
 bool LEDLightControl::Receive()
 {
+    // Stringently manage our object lifetime even through callbacks, 
+    // with the appropriate C++ lambda captures on shared_ptr to self.
+    auto self(shared_from_this());
+    
     auto result = false;
     char receiveBuffer[STANDARD_BUFFER_SIZE];
 
@@ -731,6 +757,10 @@ bool LEDLightControl::Receive()
 void LEDLightControl::ParseAndConsumeLightControlMesage(std::string& s, 
                                            const std::string& delimiter)
 {
+    // Stringently manage our object lifetime even through callbacks, 
+    // with the appropriate C++ lambda captures on shared_ptr to self.
+    auto self(shared_from_this());
+    
     size_t pos = 0;
     std::string token;
     if ((pos = s.find(delimiter)) != std::string::npos)

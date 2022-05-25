@@ -77,12 +77,17 @@ namespace Utilities
 {
     const auto GetNetworkInterfaceProfile = [](NetworkInterface * pInterface)
     {
+        std::optional<const char *> ipv6_link_local(std::nullopt);
         std::optional<const char *> ip(std::nullopt);
         std::optional<const char *> netmask(std::nullopt);
         std::optional<const char *> gateway(std::nullopt);
         std::optional<const char *> mac(std::nullopt);
         
         // Retrieve the network addresses:
+        SocketAddress socketAddress0;
+        pInterface->get_ipv6_link_local_address(&socketAddress0);
+        ipv6_link_local.emplace(socketAddress0.get_ip_address());
+        
         SocketAddress socketAddress;
         pInterface->get_ip_address(&socketAddress);
         ip.emplace(socketAddress.get_ip_address());
@@ -100,7 +105,7 @@ namespace Utilities
         // does not provide a MAC address."
         mac.emplace(pInterface->get_mac_address());
         
-        return std::make_tuple(ip, netmask, gateway, mac);
+        return std::make_tuple(ipv6_link_local, ip, netmask, gateway, mac);
     };
     
     const auto IsDomainNameAddress = [](const std::string & address)

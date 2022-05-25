@@ -35,30 +35,30 @@ Nuertey-Dragonfly-Cellular-LightControl ( revision in the current branch)
 
 ```console
 ...
-Compile [ 99.9%]: sleep.c
-Compile [100.0%]: stm32f7xx_hal_smartcard.c
+Compile [ 99.9%]: gpio_irq_api.c
+Compile [100.0%]: stm32f7xx_hal_pcd.c
 Link: Nuertey-Dragonfly-Cellular-LightControl
 Elf2Bin: Nuertey-Dragonfly-Cellular-LightControl
-| Module               |         .text |       .data |          .bss |
-|----------------------|---------------|-------------|---------------|
-| [fill]               |     116(+116) |       3(+3) |       27(+27) |
-| [lib]/c.a            |   8840(+8840) | 2108(+2108) |       58(+58) |
-| [lib]/gcc.a          |   4740(+4740) |       0(+0) |         0(+0) |
-| [lib]/misc           |     188(+188) |       4(+4) |       28(+28) |
-| [lib]/nosys.a        |       32(+32) |       0(+0) |         0(+0) |
-| [lib]/stdc++.a       |   5196(+5196) |       8(+8) |       44(+44) |
-| main.o               |   1642(+1642) |       0(+0) |     128(+128) |
-| mbed-os/cmsis        |   9420(+9420) |   168(+168) | 14400(+14400) |
-| mbed-os/connectivity |   2516(+2516) |       0(+0) | 12796(+12796) |
-| mbed-os/drivers      |     194(+194) |       0(+0) |         0(+0) |
-| mbed-os/events       |   1520(+1520) |       0(+0) |   3104(+3104) |
-| mbed-os/hal          |   1528(+1528) |       8(+8) |     114(+114) |
-| mbed-os/platform     |   7116(+7116) |   324(+324) |     433(+433) |
-| mbed-os/rtos         |   1174(+1174) |       0(+0) |         8(+8) |
-| mbed-os/targets      | 13650(+13650) |       9(+9) |   1316(+1316) |
-| Subtotals            | 57872(+57872) | 2632(+2632) | 32456(+32456) |
-Total Static RAM memory (data + bss): 35088(+35088) bytes
-Total Flash memory (text + data): 60504(+60504) bytes
+| Module               |           .text |       .data |          .bss |
+|----------------------|-----------------|-------------|---------------|
+| [fill]               |       296(+296) |     15(+15) |       63(+63) |
+| [lib]/c.a            |   12428(+12428) | 2472(+2472) |       58(+58) |
+| [lib]/gcc.a          |     4740(+4740) |       0(+0) |         0(+0) |
+| [lib]/misc           |       188(+188) |       4(+4) |       28(+28) |
+| [lib]/nosys.a        |         32(+32) |       0(+0) |         0(+0) |
+| [lib]/stdc++.a       |     7520(+7520) |       8(+8) |       44(+44) |
+| main.o               |     5422(+5422) |       1(+1) |       97(+97) |
+| mbed-os/cmsis        |     9862(+9862) |   168(+168) | 14400(+14400) |
+| mbed-os/connectivity |   55598(+55598) |   103(+103) | 23687(+23687) |
+| mbed-os/drivers      |       194(+194) |       0(+0) |         0(+0) |
+| mbed-os/events       |     1606(+1606) |       0(+0) |   3104(+3104) |
+| mbed-os/hal          |     1528(+1528) |       8(+8) |     114(+114) |
+| mbed-os/platform     |     7040(+7040) |   260(+260) |     449(+449) |
+| mbed-os/rtos         |     1244(+1244) |       0(+0) |         8(+8) |
+| mbed-os/targets      |   14058(+14058) |       9(+9) |   1316(+1316) |
+| Subtotals            | 121756(+121756) | 3048(+3048) | 43368(+43368) |
+Total Static RAM memory (data + bss): 46416(+46416) bytes
+Total Flash memory (text + data): 124804(+124804) bytes
 
 Image: ./BUILD/NUCLEO_F767ZI/GCC_ARM-MY_PROFILE/Nuertey-Dragonfly-Cellular-LightControl.bin
 
@@ -70,15 +70,18 @@ Image: ./BUILD/NUCLEO_F767ZI/GCC_ARM-MY_PROFILE/Nuertey-Dragonfly-Cellular-Light
 Lacking an actual MultiTech Dragonfly Nano dev board and associated cellular modem, SIM Card, etc., on my workbench for testing, I reconfigured and built the same Nuertey-Dragonfly-Cellular-LightControl application for my NUCLEO_F767ZI board and tested it via Ethernet transport protocol and with TCP sockets. Relevant application code segment like so:
 
 ```c++
-#ifdef NUERTEY_MTS_DRAGONFLY_L471QG
-    // This call will never return as it encapsulates an EventQueue's
-    // ::dispatch_forever() method.
-    g_pLEDLightControl->Setup<TransportScheme_t::CELLULAR_4G_LTE, TransportSocket_t::TCP>();
-#elseif NUERTEY_NUCLEO_F767ZI
-    // This call will never return as it encapsulates an EventQueue's
-    // ::dispatch_forever() method.
-    g_pLEDLightControl->Setup<TransportScheme_t::ETHERNET, TransportSocket_t::TCP>();
-#endif
+    if (g_MCUTarget == MCUTarget_t::MTS_DRAGONFLY_L471QG)
+    {
+        // This call will never return as it encapsulates an EventQueue's
+        // ::dispatch_forever() method.
+        g_pLEDLightControl->Setup<TransportScheme_t::CELLULAR_4G_LTE, TransportSocket_t::TCP>();
+    }
+    else if (g_MCUTarget == MCUTarget_t::NUCLEO_F767ZI)
+    {
+        // This call will never return as it encapsulates an EventQueue's
+        // ::dispatch_forever() method.
+        g_pLEDLightControl->Setup<TransportScheme_t::ETHERNET, TransportSocket_t::TCP>();
+    }
 ```
 
 

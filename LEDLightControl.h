@@ -180,6 +180,11 @@ LEDLightControl::LEDLightControl()
 
 LEDLightControl::~LEDLightControl()
 {
+    // Proper housekeeping though probably overkill.
+    [[maybe_unused]] auto unused_return_1 = m_pTheSocket->close();  
+    [[maybe_unused]] auto unused_return_2 = m_pNetworkInterface->disconnect();
+    g_pSharedEventQueue->break_dispatch();
+    
     // Note that from testing, I would not advise tracing at all, especially
     // for an application employing socket callback interrupts. So I have
     // disabled tracing also via the mbed_app.json configuration file.
@@ -458,8 +463,10 @@ void LEDLightControl::ConnectToSocket()
     // several NetworkInterfaces--primarily Cellular, yes?, but also Ethernet
     // to aid debug and testing, and can even be extended in the future 
     // for Mesh Networks... as already documented in the above preliminaries: 
-    auto [ip, netmask, gateway, mac] = Utilities::GetNetworkInterfaceProfile(m_pNetworkInterface);
+    auto [ipv6_link_local, ip, netmask, gateway, mac] = Utilities::GetNetworkInterfaceProfile(m_pNetworkInterface);
     
+    printf("Particular Network Interface IPv6 Link Local address: %s\n", \
+        ipv6_link_local.value_or("(null)"));
     printf("Particular Network Interface IP address: %s\n", ip.value_or("(null)"));
     printf("Particular Network Interface Netmask: %s\n", netmask.value_or("(null)"));
     printf("Particular Network Interface Gateway: %s\n", gateway.value_or("(null)"));
@@ -477,7 +484,7 @@ void LEDLightControl::ConnectToSocket()
         // to any particular derived socket type.
         m_pTheSocket = std::make_unique<TCPSocket>();
         
-        nsapi_error_t rc = m_pTheSocket->open(m_pNetworkInterface);
+        nsapi_error_t rc = dynamic_cast<TCPSocket *>(m_pTheSocket.get())->open(m_pNetworkInterface);
         if (rc != NSAPI_ERROR_OK)
         {
             printf("Error! TCPSocket.open() returned: \
@@ -493,7 +500,7 @@ void LEDLightControl::ConnectToSocket()
     {
         m_pTheSocket = std::make_unique<UDPSocket>();
         
-        nsapi_error_t rc = m_pTheSocket->open(m_pNetworkInterface);
+        nsapi_error_t rc = dynamic_cast<UDPSocket *>(m_pTheSocket.get())->open(m_pNetworkInterface);
         if (rc != NSAPI_ERROR_OK)
         {
             printf("Error! UDPSocket.open() returned: \
@@ -509,7 +516,7 @@ void LEDLightControl::ConnectToSocket()
     {
         m_pTheSocket = std::make_unique<CellularNonIPSocket>();
         
-        nsapi_error_t rc = m_pTheSocket->open(static_cast<CellularContext *>(m_pNetworkInterface));
+        nsapi_error_t rc = dynamic_cast<CellularNonIPSocket *>(m_pTheSocket.get())->open(dynamic_cast<CellularContext *>(m_pNetworkInterface));
         if (rc != NSAPI_ERROR_OK)
         {
             printf("Error! CellularNonIPSocket.open() returned: \

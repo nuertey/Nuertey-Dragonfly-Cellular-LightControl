@@ -16,23 +16,10 @@
 *   "Key features of the Mbed OS cellular APIs include:
 *   
 *       Compatible with 3GPP TS 27.007 and 27.005.
-*       Implements core functionality for OMA Lightweight M2M Client.
-*       Supports many Mbed Enabled cellular boards.
 *   
 *   3GPP TS 27.007 and 27.005 are standards to provide consistent cellular
 *   network data connectivity and SMS over an AT command interface for 
-*   cellular devices, regardless of the underlying cellular network.
-*   
-*   OMA Lightweight M2M is a protocol from the Open Mobile Alliance for 
-*   IoT device management. The Mbed OS cellular API provides core 
-*   functionality to implement the LWM2M Client. For more information, 
-*   please see OMA LightweightM2M and OMA LWM2M Object Connectivity 
-*   Management at OMA Specifications.
-*   
-*   Many Mbed Enabled boards already support cellular connectivity. 
-*   Because Mbed OS is an open source platform, developers can enable 
-*   support for new cellular boards with our adaptation framework. Please
-*   see our cellular porting guide for more information."
+*   cellular devices, regardless of the underlying cellular network."
 * 
 *   https://os.mbed.com/docs/mbed-os/v6.15/apis/cellular-networking.html
 * 

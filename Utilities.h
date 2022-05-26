@@ -78,30 +78,24 @@ namespace Utilities
     const auto GetNetworkInterfaceProfile = [](NetworkInterface * pInterface)
     {
         //printf("Running GetNetworkInterfaceProfile() lambda... \r\n");
-        
-        //std::optional<const char *> ipv6_link_local(std::nullopt);
+     
         std::optional<const char *> ip(std::nullopt);
         std::optional<const char *> netmask(std::nullopt);
         std::optional<const char *> gateway(std::nullopt);
         std::optional<const char *> mac(std::nullopt);
         
-        //// Retrieve the network addresses:
-        //printf("Running GetNetworkInterfaceProfile()::ipv6 ... \r\n");        
-        //SocketAddress socketAddress0;
-        //pInterface->get_ipv6_link_local_address(&socketAddress0);
-        //ipv6_link_local = socketAddress0.get_ip_address();
-
-        printf("Running GetNetworkInterfaceProfile()::ip ... \r\n");        
+        // Retrieve the network address(es):
+        //printf("Running GetNetworkInterfaceProfile()::ip ... \r\n");        
         SocketAddress socketAddress;
         pInterface->get_ip_address(&socketAddress);
         ip = socketAddress.get_ip_address();
 
-        printf("Running GetNetworkInterfaceProfile()::netmask ... \r\n");                
+        //printf("Running GetNetworkInterfaceProfile()::netmask ... \r\n");                
         SocketAddress socketAddress1;
         pInterface->get_netmask(&socketAddress1);        
         netmask = socketAddress1.get_ip_address();
         
-        printf("Running GetNetworkInterfaceProfile()::gateway ... \r\n");
+        //printf("Running GetNetworkInterfaceProfile()::gateway ... \r\n");
         SocketAddress socketAddress2;
         pInterface->get_gateway(&socketAddress2);
         gateway = socketAddress2.get_ip_address();
@@ -110,7 +104,7 @@ namespace Utilities
         // and may be not provided if the underlying network interface
         // does not provide a MAC address."
         mac = pInterface->get_mac_address();
-        printf("Ending GetNetworkInterfaceProfile() lambda... \r\n");
+        //printf("Ending GetNetworkInterfaceProfile() lambda... \r\n");
         
         return std::make_tuple(ip, netmask, gateway, mac);
     };

@@ -194,10 +194,7 @@ LEDLightControl::~LEDLightControl()
     [[maybe_unused]] auto unused_return_2 = m_pNetworkInterface->disconnect();
     g_pSharedEventQueue->break_dispatch();
     
-    // Note that from testing, I would not advise tracing at all, especially
-    // for an application employing socket callback interrupts. So I have
-    // disabled tracing also via the mbed_app.json configuration file.
-    //trace_close(); // For the internal cellular stack I believe.
+    trace_close();
 }
 
 template <TransportScheme_t transport, TransportSocket_t socket>
@@ -207,7 +204,7 @@ void LEDLightControl::Setup()
     printf("Running LEDLightControl::Setup() ... \r\n");
     
     randLIB_seed_random();
-    //trace_open(); // For the internal cellular stack I believe.
+    trace_open();
     
     if constexpr (transport == TransportScheme_t::CELLULAR_4G_LTE) 
     {
@@ -413,7 +410,7 @@ void LEDLightControl::ConnectToSocket()
     // Initially all sockets have unbounded timeouts. NSAPI_ERROR_WOULD_BLOCK
     // is returned if a blocking operation takes longer than the specified timeout.
     m_pTheSocket->set_blocking(true);
-    m_pTheSocket->set_timeout(BLOCKING_SOCKET_TIMEOUT_MILLISECONDS);
+    //m_pTheSocket->set_timeout(BLOCKING_SOCKET_TIMEOUT_MILLISECONDS);
     
     if (m_TheTransportSocketType != TransportSocket_t::CELLULAR_NON_IP)
     {

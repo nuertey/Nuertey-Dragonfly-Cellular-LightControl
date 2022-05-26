@@ -16,7 +16,7 @@
         "trace-level": {
             "help": "Options are TRACE_LEVEL_ERROR,TRACE_LEVEL_WARN,TRACE_LEVEL_INFO,TRACE_LEVEL_DEBUG",
             "macro_name": "MBED_TRACE_MAX_LEVEL",
-            "value": "TRACE_LEVEL_ERROR"
+            "value": "TRACE_LEVEL_DEBUG"
         },
         "network-interface":{
             "help": "options are ETHERNET, WIFI_ESP8266, WIFI_ODIN, WIFI_RTW, MESH_LOWPAN_ND, MESH_THREAD, CELLULAR_ONBOARD",
@@ -25,14 +25,20 @@
     },
     "target_overrides": {
         "*": {
+            "target.features_add": ["LWIP"],
             "platform.stdio-baud-rate": 9600,
             "platform.stdio-convert-newlines": true,
             "platform.error-filename-capture-enabled": 1,
             "mbed-trace.enable": 1,
             "rtos.main-thread-stack-size": 24576,
             "lwip.tcpip-thread-stacksize": 24576,
-            "lwip.use-mbed-trace": 1,
+            "lwip.dhcp-timeout": 480,
+            "lwip.addr-timeout": 20,
+            "lwip.use-mbed-trace": 0,
             "lwip.debug-enabled": 1,
+            "lwip.ipv4-enabled": true,
+            "lwip.ethernet-enabled": true,
+            "lwip.tcp-enabled": true,
             "events.shared-stacksize": 8192,
             "events.shared-dispatch-from-application": true
         }

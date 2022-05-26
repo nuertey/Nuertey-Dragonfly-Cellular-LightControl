@@ -79,6 +79,8 @@ int main()
 #ifdef MBED_CONF_NSAPI_DEFAULT_CELLULAR_PLMN
     printf("[MAIN], CELLULAR_PLMN: %s\n\n", (MBED_CONF_NSAPI_DEFAULT_CELLULAR_PLMN ? MBED_CONF_NSAPI_DEFAULT_CELLULAR_PLMN : "NULL"));
 #endif
+
+    mbed_trace_init();       // initialize the trace library
         
     if (g_MCUTarget == MCUTarget_t::MTS_DRAGONFLY_L471QG)
     {
@@ -88,7 +90,7 @@ int main()
     else if (g_MCUTarget == MCUTarget_t::NUCLEO_F767ZI)
     {
         // This call will never return as it encapsulates an EventQueue's dispatch_forever() method.
-        g_pLEDLightControlManager->Setup<TransportScheme_t::ETHERNET, TransportSocket_t::TCP>();
+        g_pLEDLightControlManager->Setup<TransportScheme_t::ETHERNET, TransportSocket_t::UDP>();
     }
      
     // As per design, we will NEVER get to this statement. Great! Helps with debug...

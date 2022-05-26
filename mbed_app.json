@@ -27,9 +27,12 @@
         "*": {
             "platform.stdio-baud-rate": 9600,
             "platform.stdio-convert-newlines": true,
-            "mbed-trace.enable": 0,
+            "platform.error-filename-capture-enabled": 1,
+            "mbed-trace.enable": 1,
             "rtos.main-thread-stack-size": 24576,
             "lwip.tcpip-thread-stacksize": 24576,
+            "lwip.use-mbed-trace": 1,
+            "lwip.debug-enabled": 1,
             "events.shared-stacksize": 8192,
             "events.shared-dispatch-from-application": true
         }

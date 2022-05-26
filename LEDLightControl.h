@@ -412,6 +412,7 @@ void LEDLightControl::ConnectToSocket()
     //
     // Initially all sockets have unbounded timeouts. NSAPI_ERROR_WOULD_BLOCK
     // is returned if a blocking operation takes longer than the specified timeout.
+    m_pTheSocket->set_blocking(true);
     m_pTheSocket->set_timeout(BLOCKING_SOCKET_TIMEOUT_MILLISECONDS);
     
     if (m_TheTransportSocketType != TransportSocket_t::CELLULAR_NON_IP)
@@ -437,9 +438,9 @@ void LEDLightControl::ConnectToSocket()
 
         if (m_TheTransportSocketType == TransportSocket_t::TCP)
         {
-            printf("Connecting to %s as resolved to: \"%s:%d\" ...\n", \
+            printf("Connecting to \"%s\" as resolved to: \"%s:%d\" ...\n",
                 m_EchoServerDomainName.c_str(), 
-                (*m_EchoServerAddress).c_str(), 
+                m_EchoServerAddress.value().c_str(), 
                 m_EchoServerPort);
                 
             nsapi_error_t rc = m_pTheSocket->connect(m_TheSocketAddress);
@@ -456,9 +457,8 @@ void LEDLightControl::ConnectToSocket()
             }
             else
             {   
-                printf("Success! Connected to EchoServer at %s as resolved to: \
-                    \"%s:%d\"\n", m_EchoServerDomainName.c_str()
-                    , (*m_EchoServerAddress).c_str(), m_EchoServerPort);
+                printf("Success! Connected to EchoServer at \"%s\" as resolved to: \"%s:%d\"\n", 
+                    m_EchoServerDomainName.c_str(), m_EchoServerAddress.value().c_str(), m_EchoServerPort);
             }
         }
     }
@@ -468,6 +468,8 @@ void LEDLightControl::ConnectToSocket()
 
 void LEDLightControl::Run()
 {    
+    printf("Running LEDLightControl::Run() ... \r\n");
+    
     while (g_IsConnected)
     {
         if (Send())
@@ -494,6 +496,8 @@ void LEDLightControl::Run()
 
 bool LEDLightControl::Send()
 {    
+    printf("Running LEDLightControl::Send() ... \r\n");
+    
     auto result = false;
     char rawBuffer[STANDARD_BUFFER_SIZE];
     int lengthWritten{0};    
@@ -515,15 +519,36 @@ bool LEDLightControl::Send()
                                   MY_LIGHT_CONTROL_GROUP, 
                                   (g_UserLEDState ? "1" : "0")) + 1; // Ensure to account for terminating NUL.
     
+    printf("About to MBED_ASSERT on lengthWritten. lengthWritten = %d\n%s\r\n", lengthWritten, rawBuffer);
+
     MBED_ASSERT(lengthWritten > 0);
     
-    if (m_TheTransportSocketType != TransportSocket_t::UDP)
+    if (m_TheTransportSocketType == TransportSocket_t::TCP)
     {
-        nsapi_error_t rc = m_pTheSocket->send(rawBuffer, lengthWritten);
+        printf("About to TCPSocket->send(rawBuffer, lengthWritten) ... \r\n");
+        nsapi_error_t rc = dynamic_cast<TCPSocket *>(m_pTheSocket.get())->send(rawBuffer, lengthWritten);
+        printf("After TCPSocket->send(rawBuffer, lengthWritten) ... \r\n");
         
         if (rc != NSAPI_ERROR_OK)
         {
-            printf("Error! m_pTheSocket->send() to EchoServer returned:\
+            printf("Error! TCPSocket->send() to EchoServer returned:\
+                [%d] -> %s\n", rc, ToString(rc).c_str());
+        }
+        else
+        {
+            result = true;
+            printf("Here ... \r\n");
+        }
+    }
+    else if (m_TheTransportSocketType == TransportSocket_t::CELLULAR_NON_IP)
+    {
+        printf("About to CellularNonIPSocket->send(rawBuffer, lengthWritten) ... \r\n");
+        nsapi_error_t rc = dynamic_cast<CellularNonIPSocket *>(m_pTheSocket.get())->send(rawBuffer, lengthWritten);
+        printf("After CellularNonIPSocket->send(rawBuffer, lengthWritten) ... \r\n");
+        
+        if (rc != NSAPI_ERROR_OK)
+        {
+            printf("Error! CellularNonIPSocket->send() to EchoServer returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
         }
         else
@@ -533,11 +558,13 @@ bool LEDLightControl::Send()
     }
     else
     {
-        nsapi_error_t rc = m_pTheSocket->sendto(m_TheSocketAddress, rawBuffer, lengthWritten);
+        printf("About to UDPSocket->sendto() ... \r\n");
+        nsapi_error_t rc = dynamic_cast<UDPSocket *>(m_pTheSocket.get())->sendto(m_TheSocketAddress, rawBuffer, lengthWritten);
+        printf("After UDPSocket->sendto() ... \r\n");
         
         if (rc != NSAPI_ERROR_OK)
         {
-            printf("Error! m_pTheSocket->sendto() to EchoServer returned:\
+            printf("Error! UDPSocket->sendto() to EchoServer returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
         }
         else
@@ -546,11 +573,14 @@ bool LEDLightControl::Send()
         }
     }
     
+    printf("There ... \r\n");
     return result;
 }
 
 bool LEDLightControl::Receive()
 {
+    printf("Running LEDLightControl::Receive() ... \r\n");
+    
     auto result = false;
     char receiveBuffer[STANDARD_BUFFER_SIZE];
 
@@ -621,6 +651,8 @@ bool LEDLightControl::Receive()
 void LEDLightControl::ParseAndConsumeLightControlMesage(std::string& s, 
                                            const std::string& delimiter)
 {    
+    printf("Running LEDLightControl::ParseAndConsumeLightControlMesage() ... \r\n");
+    
     size_t pos = 0;
     std::string token;
     if ((pos = s.find(delimiter)) != std::string::npos)

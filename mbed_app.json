@@ -1,6 +1,6 @@
 {
-    "macros": ["MBED_SYS_STATS_ENABLED=1", 
-               "MBED_HEAP_STATS_ENABLED=1"
+    "macros": ["MBED_SYS_STATS_ENABLED=0", 
+               "MBED_HEAP_STATS_ENABLED=0"
            ],
     
     "config": {
@@ -16,7 +16,7 @@
         "trace-level": {
             "help": "Options are TRACE_LEVEL_ERROR,TRACE_LEVEL_WARN,TRACE_LEVEL_INFO,TRACE_LEVEL_DEBUG",
             "macro_name": "MBED_TRACE_MAX_LEVEL",
-            "value": "TRACE_LEVEL_DEBUG"
+            "value": "TRACE_LEVEL_ERROR"
         },
         "network-interface":{
             "help": "options are ETHERNET, WIFI_ESP8266, WIFI_ODIN, WIFI_RTW, MESH_LOWPAN_ND, MESH_THREAD, CELLULAR_ONBOARD",
@@ -28,8 +28,9 @@
             "platform.stdio-baud-rate": 9600,
             "platform.stdio-convert-newlines": true,
             "mbed-trace.enable": 0,
-            "rtos.main-thread-stack-size": 4096,
-            "lwip.tcpip-thread-stacksize": 24576
+            "rtos.main-thread-stack-size": 24576,
+            "lwip.tcpip-thread-stacksize": 24576,
+            "events.shared-stacksize": 8192
         }
     }
 }

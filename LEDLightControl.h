@@ -108,9 +108,12 @@ static EventQueue g_SharedEventQueue(0);
 
 // Forward declarations:
 class LEDLightControl;
-class std::shared_ptr<LEDLightControl>;
+//class std::shared_ptr<LEDLightControl>;
 
-extern std::shared_ptr<LEDLightControl> g_pLEDLightControlManager;
+extern LEDLightControl * g_pLEDLightControlManager;
+bool m_IsConnected{false};
+
+void NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t parameterPointerData);
 
 // Since we are going to be invoking NetworkStatusCallbacks on, ostensibly,
 // the same instance of LEDLightControl, leverage std::enable_shared_from_this.
@@ -119,7 +122,7 @@ extern std::shared_ptr<LEDLightControl> g_pLEDLightControlManager;
 // managed by a std::shared_ptr named pt to safely generate additional
 // std::shared_ptr instances pt1, pt2, ... that all share ownership of t
 // with pt. "
-class LEDLightControl : public std::enable_shared_from_this<LEDLightControl>
+class LEDLightControl //: public std::enable_shared_from_this<LEDLightControl>
 {   
     // 1 minute of failing to exchange packets with the EchoServer ought
     // to be enough to tell us that there is something wrong with the socket.
@@ -141,8 +144,6 @@ public:
     template <TransportScheme_t transport, TransportSocket_t socket>
         requires IsValidTransportType<transport, socket>
     void Setup();
-    
-    void NetworkStatusCallback(nsapi_event_t status, intptr_t param);
     
     void ConnectToSocket();
 
@@ -168,7 +169,6 @@ private:
     std::string                m_EchoServerDomainName; // Domain name will always exist.
     std::optional<std::string> m_EchoServerAddress;    // However IP Address might not always exist...
     uint16_t                   m_EchoServerPort;
-    bool                       m_IsConnected;
     
     // Portable Socket class interface for handling all the 3 possible
     // socket types. Ergo:
@@ -184,7 +184,6 @@ LEDLightControl::LEDLightControl()
     : m_EchoServerDomainName(ECHO_HOSTNAME)
     , m_EchoServerAddress(std::nullopt)
     , m_EchoServerPort(ECHO_PORT) 
-    , m_IsConnected(false)
 {
 }
 
@@ -265,7 +264,7 @@ void LEDLightControl::Setup()
     }
     
     // Asynchronously monitor for Network Status events:
-    m_pNetworkInterface->attach(callback(this, &LEDLightControl::NetworkStatusCallback));
+    m_pNetworkInterface->attach(callback(NetworkStatusCallback));
     
     // "Attach to network so we can get update status from the network"
     // _nw->attach(callback(this, &CellularDevice::cellular_callback));
@@ -328,152 +327,11 @@ void LEDLightControl::ConnectToNetworkInterface()
     g_SharedEventQueue.dispatch_forever();
 }
 
-void LEDLightControl::NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t parameterPointerData)
-{
-    // Stringently manage our object lifetime even through callbacks, 
-    // with the appropriate C++ lambda captures on shared_ptr to self.
-    auto self(shared_from_this());
-    
-    // TBD Nuertey Odzeyem; verify with testing whether this assertion 
-    // is needed, and if it is here, will it negatively affect the "workings"
-    // of the Cellular network.
-    //assert(statusEvent == NSAPI_EVENT_CONNECTION_STATUS_CHANGE);
-
-    g_STDIOMutex.lock();
-    printf("Network Connection status changed!\r\n");
-
-    switch (parameterPointerData)
-    {
-        case NSAPI_STATUS_LOCAL_UP:
-        {
-            printf("Local IP address set!\r\n");
-            g_STDIOMutex.unlock();
-            break;
-        }
-        case NSAPI_STATUS_GLOBAL_UP:
-        {
-            printf("Global IP address set!\r\n");
-            m_IsConnected = true;
-            g_STDIOMutex.unlock();
-            
-            // Post the asynchronously notified network status change on the shared event
-            // queue so that its actions can be scheduled and complete in synchronous
-            // thread mode instead of in interrupt (i.e. callback) mode.
-//            auto event1 = make_user_allocated_event(GetOriginalPointer(), 
-//                                                    &LEDLightControl::ConnectToSocket);
-
-            auto event1 = make_user_allocated_event(g_pLEDLightControlManager.get(), 
-                                                    &LEDLightControl::ConnectToSocket);
-        
-            // bind & post
-            event1.call_on(&g_SharedEventQueue);
-            
-            // Note that the EventQueue has no concept of event priority. 
-            // If you schedule events to run at the same time, the order in
-            // which the events run relative to one another is undefined. 
-            // The EventQueue only schedules events based on time.
-            //g_STDIOMutex.lock();
-            //printf("Running Global Up::End ... \r\n");
-            //g_STDIOMutex.unlock();
-            break;
-        }
-        case NSAPI_STATUS_DISCONNECTED:
-        {
-            printf("NetworkInterface disconnected!\r\n");
-            m_IsConnected = false;
-            g_STDIOMutex.unlock();
-            
-            tr_debug("Network Status Event Callback: %d, \t\r\nparameterPointerData: %d", \
-                statusEvent, parameterPointerData);
-                
-            if (statusEvent == NSAPI_EVENT_CONNECTION_STATUS_CHANGE) //&& parameterPointerData == NSAPI_STATUS_DISCONNECTED)
-            {
-                // we have been disconnected, reset state machine so that application can start connect sequence again
-                // if (_state_machine)
-                // {
-                //  _state_machine->reset();
-                // }
-            }
-            break;
-        }
-        case NSAPI_STATUS_CONNECTING:
-        {
-            printf("Connecting to network!\r\n");
-            g_STDIOMutex.unlock();
-            break;
-        }
-        default:
-        {
-            printf("Perhaps New Cellular Pointer Data Codes Have Asynchronously Arrived:\r\n");
-            g_STDIOMutex.unlock();
-            
-            if (statusEvent >= NSAPI_EVENT_CELLULAR_STATUS_BASE && statusEvent <= NSAPI_EVENT_CELLULAR_STATUS_END)
-            {
-                cell_callback_data_t *ptr_data = (cell_callback_data_t *)parameterPointerData;
-                
-                tr_debug("Network Status Event Callback: %d, \t\r\nptr_data->error: %d, \t\r\nptr_data->status_data: %d", \
-                    statusEvent, ptr_data->error, ptr_data->status_data);
-                
-                cellular_connection_status_t cellEvent = static_cast<cellular_connection_status_t>(statusEvent);
-                
-                //if (cellEvent == CellularRegistrationStatusChanged)
-                //{
-                //    // broadcast only network registration changes to state machine
-                //    //_state_machine->cellular_event_changed(ev, ptr);
-                //}
-
-                if (cellEvent == CellularDeviceReady && ptr_data->error == NSAPI_ERROR_OK)
-                {
-                    // // Here we can create mux and give new filehandles as mux reserves the one what was in use.
-                    // // if mux we would need to set new filehandle:_state_machine->set_filehandle( get fh from mux);
-                    // _nw = open_network(_fh);
-                    // // Attach to network so we can get update status from the network
-                    // _nw->attach(callback(this, &CellularDevice::cellular_callback));
-                    // if (strlen(_plmn))
-                    // {
-                    //     _state_machine->set_plmn(_plmn);
-                    // }
-
-                    // TBD Nuertey Odzeyem; should it be like this in this
-                    // state of the Cellular state machine? 
-                    // Confirm with testing...:
-                    g_STDIOMutex.lock();
-                    m_IsConnected = true;
-                    g_STDIOMutex.unlock();
-
-                    // Post the asynchronously notified network status change on the shared event
-                    // queue so that its actions can be scheduled and complete in synchronous
-                    // thread mode instead of in interrupt (callback) mode.
-                    //auto event1 = make_user_allocated_event(GetOriginalPointer(), 
-                    //                                        &LEDLightControl::ConnectToSocket);
-                    //
-                    //// bind & post
-                    //event1.call_on(&g_SharedEventQueue);
-                    
-                    // Note that the EventQueue has no concept of event priority. 
-                    // If you schedule events to run at the same time, the order in
-                    // which the events run relative to one another is undefined. 
-                    // The EventQueue only schedules events based on time.
-                }
-                //else if (cellEvent == CellularSIMStatusChanged && ptr_data->error == NSAPI_ERROR_OK &&
-                //         ptr_data->status_data == CellularSIM::SimStatePinNeeded)
-                //{
-                //    // if (strlen(_sim_pin))
-                //    // {
-                //    //     _state_machine->set_sim_pin(_sim_pin);
-                //    // }
-                //}
-            }
-            break;
-        }
-    }
-}
-
 void LEDLightControl::ConnectToSocket()
 {
     // Stringently manage our object lifetime even through callbacks, 
     // with the appropriate C++ lambda captures on shared_ptr to self.
-    auto self(shared_from_this());
+    //auto self(shared_from_this());
     
     printf("Running LEDLightControl::ConnectToSocket() ... \r\n");
     
@@ -482,10 +340,10 @@ void LEDLightControl::ConnectToSocket()
     // several NetworkInterfaces--primarily Cellular, yes?, but also Ethernet
     // to aid debug and testing, and can even be extended in the future 
     // for Mesh Networks... as already documented in the above preliminaries: 
-    auto [ipv6_link_local, ip, netmask, gateway, mac] = Utilities::GetNetworkInterfaceProfile(m_pNetworkInterface);
+    auto [ip, netmask, gateway, mac] = Utilities::GetNetworkInterfaceProfile(m_pNetworkInterface);
     
-    printf("Particular Network Interface IPv6 Link Local address: %s\n", \
-        ipv6_link_local.value_or("(null)"));
+    //printf("Particular Network Interface IPv6 Link Local address: %s\n", \
+        //ipv6_link_local.value_or("(null)"));
     printf("Particular Network Interface IP address: %s\n", ip.value_or("(null)"));
     printf("Particular Network Interface Netmask: %s\n", netmask.value_or("(null)"));
     printf("Particular Network Interface Gateway: %s\n", gateway.value_or("(null)"));
@@ -607,7 +465,7 @@ void LEDLightControl::Run()
 {
     // Stringently manage our object lifetime even through callbacks, 
     // with the appropriate C++ lambda captures on shared_ptr to self.
-    auto self(shared_from_this());
+    //auto self(shared_from_this());
     
     while (m_IsConnected)
     {
@@ -637,7 +495,7 @@ bool LEDLightControl::Send()
 {
     // Stringently manage our object lifetime even through callbacks, 
     // with the appropriate C++ lambda captures on shared_ptr to self.
-    auto self(shared_from_this());
+    //auto self(shared_from_this());
     
     auto result = false;
     char rawBuffer[STANDARD_BUFFER_SIZE];
@@ -698,7 +556,7 @@ bool LEDLightControl::Receive()
 {
     // Stringently manage our object lifetime even through callbacks, 
     // with the appropriate C++ lambda captures on shared_ptr to self.
-    auto self(shared_from_this());
+    //auto self(shared_from_this());
     
     auto result = false;
     char receiveBuffer[STANDARD_BUFFER_SIZE];
@@ -772,7 +630,7 @@ void LEDLightControl::ParseAndConsumeLightControlMesage(std::string& s,
 {
     // Stringently manage our object lifetime even through callbacks, 
     // with the appropriate C++ lambda captures on shared_ptr to self.
-    auto self(shared_from_this());
+    //auto self(shared_from_this());
     
     size_t pos = 0;
     std::string token;
@@ -835,5 +693,142 @@ void LEDLightControl::ParseAndConsumeLightControlMesage(std::string& s,
     {
         printf("Error! 1st occurrence of LightControl \
             message delimiter parsing failed.\r\n");
+    }
+}
+
+// Create a user allocated event to be later bound:
+auto event1 = make_user_allocated_event(g_pLEDLightControlManager, 
+                                        &LEDLightControl::ConnectToSocket);
+
+void NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t parameterPointerData)
+{
+    // Stringently manage our object lifetime even through callbacks, 
+    // with the appropriate C++ lambda captures on shared_ptr to self.
+    //auto self(shared_from_this());
+    
+    // TBD Nuertey Odzeyem; verify with testing whether this assertion 
+    // is needed, and if it is here, will it negatively affect the "workings"
+    // of the Cellular network.
+    //assert(statusEvent == NSAPI_EVENT_CONNECTION_STATUS_CHANGE);
+
+    switch (parameterPointerData)
+    {
+        case NSAPI_STATUS_LOCAL_UP:
+        {
+            //g_STDIOMutex.lock();
+            //printf("Local IP address set!\r\n");
+            //g_STDIOMutex.unlock();
+            break;
+        }
+        case NSAPI_STATUS_GLOBAL_UP:
+        {
+            //g_STDIOMutex.lock();
+            //printf("Global IP address set!\r\n");
+            m_IsConnected = true;
+            //g_STDIOMutex.unlock();
+            
+            // Post the asynchronously notified network status change on the shared event
+            // queue so that its actions can be scheduled and complete in synchronous
+            // thread mode instead of in interrupt (i.e. callback) mode.
+            
+            // bind & post
+            event1.call_on(&g_SharedEventQueue);
+            
+            // Note that the EventQueue has no concept of event priority. 
+            // If you schedule events to run at the same time, the order in
+            // which the events run relative to one another is undefined. 
+            // The EventQueue only schedules events based on time.
+            break;
+        }
+        case NSAPI_STATUS_DISCONNECTED:
+        {
+            g_STDIOMutex.lock();
+            printf("NetworkInterface disconnected!\r\n");
+            m_IsConnected = false;
+            g_STDIOMutex.unlock();
+            
+            //tr_debug("Network Status Event Callback: %d, \t\r\nparameterPointerData: %d", \
+            //    statusEvent, parameterPointerData);
+                
+            if (statusEvent == NSAPI_EVENT_CONNECTION_STATUS_CHANGE) //&& parameterPointerData == NSAPI_STATUS_DISCONNECTED)
+            {
+                // we have been disconnected, reset state machine so that application can start connect sequence again
+                // if (_state_machine)
+                // {
+                //  _state_machine->reset();
+                // }
+            }
+            break;
+        }
+        case NSAPI_STATUS_CONNECTING:
+        {
+            //g_STDIOMutex.lock();
+            //printf("Connecting to network!\r\n");
+            //g_STDIOMutex.unlock();
+            break;
+        }
+        default:
+        {
+            g_STDIOMutex.lock();
+            printf("Perhaps New Cellular Pointer Data Codes Have Asynchronously Arrived:\r\n");
+            g_STDIOMutex.unlock();
+            
+            if (statusEvent >= NSAPI_EVENT_CELLULAR_STATUS_BASE && statusEvent <= NSAPI_EVENT_CELLULAR_STATUS_END)
+            {
+                cell_callback_data_t *ptr_data = (cell_callback_data_t *)parameterPointerData;
+                
+                tr_debug("Network Status Event Callback: %d, \t\r\nptr_data->error: %d, \t\r\nptr_data->status_data: %d", \
+                    statusEvent, ptr_data->error, ptr_data->status_data);
+                
+                cellular_connection_status_t cellEvent = static_cast<cellular_connection_status_t>(statusEvent);
+                
+                //if (cellEvent == CellularRegistrationStatusChanged)
+                //{
+                //    // broadcast only network registration changes to state machine
+                //    //_state_machine->cellular_event_changed(ev, ptr);
+                //}
+
+                if (cellEvent == CellularDeviceReady && ptr_data->error == NSAPI_ERROR_OK)
+                {
+                    // // Here we can create mux and give new filehandles as mux reserves the one what was in use.
+                    // // if mux we would need to set new filehandle:_state_machine->set_filehandle( get fh from mux);
+                    // _nw = open_network(_fh);
+                    // // Attach to network so we can get update status from the network
+                    // _nw->attach(callback(this, &CellularDevice::cellular_callback));
+                    // if (strlen(_plmn))
+                    // {
+                    //     _state_machine->set_plmn(_plmn);
+                    // }
+
+                    // TBD Nuertey Odzeyem; should it be like this in this
+                    // state of the Cellular state machine? 
+                    // Confirm with testing...:
+                    g_STDIOMutex.lock();
+                    m_IsConnected = true;
+                    g_STDIOMutex.unlock();
+
+                    // Post the asynchronously notified network status change on the shared event
+                    // queue so that its actions can be scheduled and complete in synchronous
+                    // thread mode instead of in interrupt (callback) mode.
+                
+                    // bind & post
+                    event1.call_on(&g_SharedEventQueue);
+                    
+                    // Note that the EventQueue has no concept of event priority. 
+                    // If you schedule events to run at the same time, the order in
+                    // which the events run relative to one another is undefined. 
+                    // The EventQueue only schedules events based on time.
+                }
+                //else if (cellEvent == CellularSIMStatusChanged && ptr_data->error == NSAPI_ERROR_OK &&
+                //         ptr_data->status_data == CellularSIM::SimStatePinNeeded)
+                //{
+                //    // if (strlen(_sim_pin))
+                //    // {
+                //    //     _state_machine->set_sim_pin(_sim_pin);
+                //    // }
+                //}
+            }
+            break;
+        }
     }
 }

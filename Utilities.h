@@ -77,37 +77,42 @@ namespace Utilities
 {
     const auto GetNetworkInterfaceProfile = [](NetworkInterface * pInterface)
     {
-        printf("Running GetNetworkInterfaceProfile() lambda... \r\n");
+        //printf("Running GetNetworkInterfaceProfile() lambda... \r\n");
         
-        std::optional<const char *> ipv6_link_local(std::nullopt);
+        //std::optional<const char *> ipv6_link_local(std::nullopt);
         std::optional<const char *> ip(std::nullopt);
         std::optional<const char *> netmask(std::nullopt);
         std::optional<const char *> gateway(std::nullopt);
         std::optional<const char *> mac(std::nullopt);
         
-        // Retrieve the network addresses:
-        SocketAddress socketAddress0;
-        pInterface->get_ipv6_link_local_address(&socketAddress0);
-        ipv6_link_local.emplace(socketAddress0.get_ip_address());
-        
+        //// Retrieve the network addresses:
+        //printf("Running GetNetworkInterfaceProfile()::ipv6 ... \r\n");        
+        //SocketAddress socketAddress0;
+        //pInterface->get_ipv6_link_local_address(&socketAddress0);
+        //ipv6_link_local = socketAddress0.get_ip_address();
+
+        printf("Running GetNetworkInterfaceProfile()::ip ... \r\n");        
         SocketAddress socketAddress;
         pInterface->get_ip_address(&socketAddress);
-        ip.emplace(socketAddress.get_ip_address());
-        
+        ip = socketAddress.get_ip_address();
+
+        printf("Running GetNetworkInterfaceProfile()::netmask ... \r\n");                
         SocketAddress socketAddress1;
         pInterface->get_netmask(&socketAddress1);        
-        netmask.emplace(socketAddress1.get_ip_address());
+        netmask = socketAddress1.get_ip_address();
         
+        printf("Running GetNetworkInterfaceProfile()::gateway ... \r\n");
         SocketAddress socketAddress2;
         pInterface->get_gateway(&socketAddress2);
-        gateway.emplace(socketAddress2.get_ip_address());
+        gateway = socketAddress2.get_ip_address();
         
         // "Provided MAC address is intended for info or debug purposes
         // and may be not provided if the underlying network interface
         // does not provide a MAC address."
-        mac.emplace(pInterface->get_mac_address());
+        mac = pInterface->get_mac_address();
+        printf("Ending GetNetworkInterfaceProfile() lambda... \r\n");
         
-        return std::make_tuple(ipv6_link_local, ip, netmask, gateway, mac);
+        return std::make_tuple(ip, netmask, gateway, mac);
     };
     
     const auto IsDomainNameAddress = [](const std::string & address)

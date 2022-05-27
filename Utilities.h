@@ -148,6 +148,16 @@ namespace Utilities
                 // as we are emplace'ing:
                 ipAddress.emplace(pTheSocketAddress->get_ip_address());
             }
+            else
+            {
+                // Assume that we are already dealing with an IP address. i.e.,
+                // as the designer of this application, I am mandating that the
+                // user can choose to specify IP addresses directly in the mbed_app.json
+                // echo-server-hostname field. This will facilitate testing with
+                // locally hosted Echo Servers, which by necessity, do not have 
+                // DNS names.
+                ipAddress.emplace(address.c_str()); 
+            }
         }
 
         return ipAddress;

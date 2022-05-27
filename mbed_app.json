@@ -7,7 +7,7 @@
         "sock-type": "NUERTEY_TCP",
         "echo-server-hostname": {
             "help": "Echo server host name.",
-            "value": "\"echo.mbedcloudtesting.com\""
+            "value": "\"10.50.10.25\""
         },
         "echo-server-port": {
             "help": "Echo server port number.",

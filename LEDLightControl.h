@@ -471,6 +471,9 @@ void LEDLightControl::ConnectToSocket()
         }
     }
     
+    // TBD Nuertey Odzeyem; to debug my Ubuntu Ethernet port since it is 
+    // having issues, do not send or receive for now on the socket. Just
+    // establish the connection so that I can query it on the Ubuntu peer.
     Run();
 }
 

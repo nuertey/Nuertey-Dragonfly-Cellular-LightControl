@@ -76,7 +76,7 @@ int main()
     else if (g_MCUTarget == MCUTarget_t::NUCLEO_F767ZI)
     {
         // This call will never return as it encapsulates an EventQueue's dispatch_forever() method.
-        g_pLEDLightControlManager->Setup<TransportScheme_t::ETHERNET, TransportSocket_t::UDP>();
+        g_pLEDLightControlManager->Setup<TransportScheme_t::ETHERNET, TransportSocket_t::TCP>();
     }
     
     // It is envisioned that the application will execute forever so, the

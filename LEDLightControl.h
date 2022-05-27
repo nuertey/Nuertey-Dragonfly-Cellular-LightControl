@@ -156,7 +156,7 @@ protected:
     [[nodiscard]] bool Send();
     [[nodiscard]] bool Receive();
     
-    void ParseAndConsumeLightControlMesage(std::string& s, const std::string& delimiter);
+    void ParseAndConsumeLightControlMessage(std::string& s, const std::string& delimiter);
     
 private:
     TransportScheme_t          m_TheTransportSchemeType;
@@ -190,9 +190,20 @@ LEDLightControl::LEDLightControl()
 LEDLightControl::~LEDLightControl()
 {
     // Proper housekeeping though probably overkill.
-    [[maybe_unused]] auto unused_return_1 = m_pTheSocket->close();  
-    [[maybe_unused]] auto unused_return_2 = m_pNetworkInterface->disconnect();
-    g_pSharedEventQueue->break_dispatch();
+    if (m_pTheSocket)
+    {
+        [[maybe_unused]] auto unused_return_1 = m_pTheSocket->close();  
+    }
+    
+    if (m_pNetworkInterface)
+    {
+        [[maybe_unused]] auto unused_return_2 = m_pNetworkInterface->disconnect();
+    }
+    
+    if (g_pSharedEventQueue)
+    {
+        g_pSharedEventQueue->break_dispatch();
+    }
     
     trace_close();
 }
@@ -598,7 +609,7 @@ bool LEDLightControl::Receive()
             std::string s(receiveBuffer, rc);
             std::string delimiter = ";";
                         
-            ParseAndConsumeLightControlMesage(s, delimiter);
+            ParseAndConsumeLightControlMessage(s, delimiter);
         }
         else if (rc < 0)
         {
@@ -627,7 +638,7 @@ bool LEDLightControl::Receive()
             std::string s(receiveBuffer, rc);
             std::string delimiter = ";";
                         
-            ParseAndConsumeLightControlMesage(s, delimiter);
+            ParseAndConsumeLightControlMessage(s, delimiter);
         }
         else if (rc < 0)
         {
@@ -645,10 +656,10 @@ bool LEDLightControl::Receive()
     return result;
 }
 
-void LEDLightControl::ParseAndConsumeLightControlMesage(std::string& s, 
+void LEDLightControl::ParseAndConsumeLightControlMessage(std::string& s, 
                                            const std::string& delimiter)
 {    
-    printf("Running LEDLightControl::ParseAndConsumeLightControlMesage() ... \r\n");
+    printf("Running LEDLightControl::ParseAndConsumeLightControlMessage() ... \r\n");
     
     size_t pos = 0;
     std::string token;

@@ -23,7 +23,6 @@
 * 
 *   https://os.mbed.com/docs/mbed-os/v6.15/apis/cellular-networking.html
 * 
-* 
 *   Dragonfly Nano Key Benefits
 * 
 *   End device certified by leading carriers
@@ -79,7 +78,11 @@ int main()
         // This call will never return as it encapsulates an EventQueue's dispatch_forever() method.
         g_pLEDLightControlManager->Setup<TransportScheme_t::ETHERNET, TransportSocket_t::UDP>();
     }
-     
+    
+    // It is envisioned that the application will execute forever so, the
+    // following statement will never be reached, as indeed we do not want it to. 
+    delete g_pLEDLightControlManager;
+    
     // As per design, we will NEVER get to this statement. Great! Helps with debug...
     printf("\r\n\r\nNuertey-Dragonfly-Cellular-LightControl Application - Exiting.\r\n\r\n");
 }

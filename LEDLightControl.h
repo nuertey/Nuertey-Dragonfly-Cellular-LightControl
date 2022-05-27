@@ -442,6 +442,7 @@ void LEDLightControl::ConnectToSocket()
             // event again should network conditions become better favorable.                
             return; 
         }
+        
         m_TheSocketAddress.set_port(m_EchoServerPort);
 
         if (m_TheTransportSocketType == TransportSocket_t::TCP)

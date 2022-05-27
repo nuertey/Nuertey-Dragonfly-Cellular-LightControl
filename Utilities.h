@@ -155,8 +155,15 @@ namespace Utilities
                 // user can choose to specify IP addresses directly in the mbed_app.json
                 // echo-server-hostname field. This will facilitate testing with
                 // locally hosted Echo Servers, which by necessity, do not have 
-                // DNS names.
-                ipAddress.emplace(address.c_str()); 
+                // DNS names. 
+                
+                // In which case the following is how we can ensure that the requisite 
+                // SocketAddress object that is normally created during FQDN resolution,
+                // is manually constructed and propagated back to the User:
+                SocketAddress tempSockAddress(address.c_str(), 0);
+                *pTheSocketAddress = tempSockAddress;
+
+                ipAddress.emplace(address.c_str());                
             }
         }
 

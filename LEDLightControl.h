@@ -176,7 +176,7 @@ private:
     // TCP - Connection-oriented IP.
     // UDP - Connection-less IP.
     // CellularNonIP - 3GPP non-IP datagrams (NIDD) using the cellular IoT feature.
-    std::unique_ptr<Socket>   m_pTheSocket;
+    Socket *                  m_pTheSocket;
     SocketAddress             m_TheSocketAddress;
 };
 
@@ -189,10 +189,15 @@ LEDLightControl::LEDLightControl()
 
 LEDLightControl::~LEDLightControl()
 {
-    // Proper housekeeping though probably overkill.
+    // Proper housekeeping...
     if (m_pTheSocket)
     {
-        [[maybe_unused]] auto unused_return_1 = m_pTheSocket->close();  
+        [[maybe_unused]] auto unused_return_1 = m_pTheSocket->close();
+        delete m_pTheSocket;
+        
+        // Per issues discussed in the link below, proactively ensuring
+        // that I don't run into any issues with MbedOS.  
+        m_pTheSocket = nullptr; 
     }
     
     if (m_pNetworkInterface)
@@ -369,9 +374,9 @@ void LEDLightControl::ConnectToSocket()
     {
         // Portable way of using the Abstract base class Socket to refer
         // to any particular derived socket type.
-        m_pTheSocket = std::make_unique<TCPSocket>();
+        m_pTheSocket = new TCPSocket();
         
-        nsapi_error_t rc = dynamic_cast<TCPSocket *>(m_pTheSocket.get())->open(m_pNetworkInterface);
+        nsapi_error_t rc = dynamic_cast<TCPSocket *>(m_pTheSocket)->open(m_pNetworkInterface);
         if (rc != NSAPI_ERROR_OK)
         {
             printf("Error! TCPSocket.open() returned: \
@@ -385,9 +390,9 @@ void LEDLightControl::ConnectToSocket()
     }
     else if (m_TheTransportSocketType == TransportSocket_t::UDP)
     {
-        m_pTheSocket = std::make_unique<UDPSocket>();
+        m_pTheSocket = new UDPSocket();
         
-        nsapi_error_t rc = dynamic_cast<UDPSocket *>(m_pTheSocket.get())->open(m_pNetworkInterface);
+        nsapi_error_t rc = dynamic_cast<UDPSocket *>(m_pTheSocket)->open(m_pNetworkInterface);
         if (rc != NSAPI_ERROR_OK)
         {
             printf("Error! UDPSocket.open() returned: \
@@ -401,9 +406,9 @@ void LEDLightControl::ConnectToSocket()
     }
     else if (m_TheTransportSocketType == TransportSocket_t::CELLULAR_NON_IP)
     {
-        m_pTheSocket = std::make_unique<CellularNonIPSocket>();
+        m_pTheSocket = new CellularNonIPSocket();
         
-        nsapi_error_t rc = dynamic_cast<CellularNonIPSocket *>(m_pTheSocket.get())->open(dynamic_cast<CellularContext *>(m_pNetworkInterface));
+        nsapi_error_t rc = dynamic_cast<CellularNonIPSocket *>(m_pTheSocket)->open(dynamic_cast<CellularContext *>(m_pNetworkInterface));
         if (rc != NSAPI_ERROR_OK)
         {
             printf("Error! CellularNonIPSocket.open() returned: \
@@ -421,7 +426,7 @@ void LEDLightControl::ConnectToSocket()
     // Initially all sockets have unbounded timeouts. NSAPI_ERROR_WOULD_BLOCK
     // is returned if a blocking operation takes longer than the specified timeout.
     m_pTheSocket->set_blocking(true);
-    //m_pTheSocket->set_timeout(BLOCKING_SOCKET_TIMEOUT_MILLISECONDS);
+    m_pTheSocket->set_timeout(BLOCKING_SOCKET_TIMEOUT_MILLISECONDS);
     
     if (m_TheTransportSocketType != TransportSocket_t::CELLULAR_NON_IP)
     {
@@ -514,6 +519,8 @@ bool LEDLightControl::Send()
     char rawBuffer[STANDARD_BUFFER_SIZE];
     int lengthWritten{0};    
     
+    memset(rawBuffer, 0, sizeof(rawBuffer));
+    
     // Simulate LED blinking through LightControl protocol messages sent 
     // on the various supported socket transport protocols:
     g_UserLEDState = !g_UserLEDState;
@@ -537,9 +544,16 @@ bool LEDLightControl::Send()
     
     if (m_TheTransportSocketType == TransportSocket_t::TCP)
     {
+        // Testing and debugging code:
+        //char sbuffer[] = "GET / HTTP/1.1\r\nHost: ifconfig.io\r\n\r\n";
+        //int scount = socket.send(sbuffer, sizeof sbuffer);
+        //printf("sent %d [%.*s]\n", scount, strstr(sbuffer, "\r\n") - sbuffer, sbuffer);
+        // End testing and debugging code.
+        
         printf("About to TCPSocket->send(rawBuffer, lengthWritten) ... \r\n");
-        nsapi_error_t rc = dynamic_cast<TCPSocket *>(m_pTheSocket.get())->send(rawBuffer, lengthWritten);
-        printf("After TCPSocket->send(rawBuffer, lengthWritten) ... \r\n");
+        //nsapi_error_t rc = dynamic_cast<TCPSocket *>(m_pTheSocket)->send(sbuffer, sizeof sbuffer);
+        nsapi_error_t rc = dynamic_cast<TCPSocket *>(m_pTheSocket)->send(rawBuffer, lengthWritten);
+        printf("After TCPSocket->send(rawBuffer, lengthWritten). rc = [%d] \r\n", rc);
         
         if (rc != NSAPI_ERROR_OK)
         {
@@ -555,7 +569,7 @@ bool LEDLightControl::Send()
     else if (m_TheTransportSocketType == TransportSocket_t::CELLULAR_NON_IP)
     {
         printf("About to CellularNonIPSocket->send(rawBuffer, lengthWritten) ... \r\n");
-        nsapi_error_t rc = dynamic_cast<CellularNonIPSocket *>(m_pTheSocket.get())->send(rawBuffer, lengthWritten);
+        nsapi_error_t rc = dynamic_cast<CellularNonIPSocket *>(m_pTheSocket)->send(rawBuffer, lengthWritten);
         printf("After CellularNonIPSocket->send(rawBuffer, lengthWritten) ... \r\n");
         
         if (rc != NSAPI_ERROR_OK)
@@ -571,7 +585,7 @@ bool LEDLightControl::Send()
     else
     {
         printf("About to UDPSocket->sendto() ... \r\n");
-        nsapi_error_t rc = dynamic_cast<UDPSocket *>(m_pTheSocket.get())->sendto(m_TheSocketAddress, rawBuffer, lengthWritten);
+        nsapi_error_t rc = dynamic_cast<UDPSocket *>(m_pTheSocket)->sendto(m_TheSocketAddress, rawBuffer, lengthWritten);
         printf("After UDPSocket->sendto() ... \r\n");
         
         if (rc != NSAPI_ERROR_OK)

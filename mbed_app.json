@@ -25,7 +25,6 @@
     },
     "target_overrides": {
         "*": {
-            "target.features_add": ["LWIP"],
             "platform.stdio-baud-rate": 9600,
             "platform.stdio-convert-newlines": true,
             "platform.error-filename-capture-enabled": 1,
@@ -34,17 +33,10 @@
             "platform.error-hist-size": 10,
             "platform.stack-dump-enabled": true,
             "mbed-trace.enable": 1,
-            "rtos.main-thread-stack-size": 8192,
-            "lwip.tcpip-thread-stacksize": 8192,
-            "lwip.dhcp-timeout": 960,
-            "lwip.addr-timeout": 20,
             "lwip.use-mbed-trace": 1,
-            "lwip.debug-enabled": 1,
             "lwip.ipv4-enabled": true,
             "lwip.ethernet-enabled": true,
             "lwip.tcp-enabled": true,
-            "lwip.raw-socket-enabled": 1,
-            "events.shared-stacksize": 8192,
             "events.shared-dispatch-from-application": true
         }
     }

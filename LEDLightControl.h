@@ -128,7 +128,7 @@ protected:
     [[nodiscard]] bool Send();
     [[nodiscard]] bool Receive();
     
-    void ParseAndConsumeLightControlMessage(std::string& s, const std::string& delimiter);
+    bool ParseAndConsumeLightControlMessage(std::string& s, const std::string& delimiter);
     
 private:
     TransportScheme_t          m_TheTransportSchemeType;
@@ -438,20 +438,20 @@ bool LEDLightControl::Send()
                                   sizeof(rawBuffer), 
                                   "t:lights;g:%03d;s:%s;", 
                                   MY_LIGHT_CONTROL_GROUP, 
-                                  (g_UserLEDState ? "1" : "0"));
+                                  (g_UserLEDState ? "1" : "0")) + 1;
     
     MBED_ASSERT(lengthWritten > 0);
     MBED_ASSERT(lengthWritten < sizeof(rawBuffer));
-
+    
     printf("After MBED_ASSERT on lengthWritten. lengthWritten = %d\n%s\r\n", lengthWritten, rawBuffer);
 
     if (m_TheTransportSocketType == TransportSocket_t::TCP)
     {        
-        printf("About to TCPSocket.send(rawBuffer, lengthWritten) ... \r\n");
+        //printf("About to TCPSocket.send(rawBuffer, lengthWritten) ... \r\n");
         nsapi_error_t rc = m_TheSocket.send(rawBuffer, lengthWritten);
         printf("After TCPSocket.send(rawBuffer, lengthWritten). rc = [%d] \r\n", rc);
         
-        if (rc != NSAPI_ERROR_OK)
+        if (rc < 0)
         {
             printf("Error! TCPSocket.send() to EchoServer returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
@@ -459,16 +459,16 @@ bool LEDLightControl::Send()
         else
         {
             result = true;
-            printf("Here ... \r\n");
+            //printf("Here ... \r\n");
         }
     }
     else if (m_TheTransportSocketType == TransportSocket_t::CELLULAR_NON_IP)
     {
-        printf("About to CellularNonIPSocket.send(rawBuffer, lengthWritten) ... \r\n");
+        //printf("About to CellularNonIPSocket.send(rawBuffer, lengthWritten) ... \r\n");
         nsapi_error_t rc = m_TheSocket.send(rawBuffer, lengthWritten);
-        printf("After CellularNonIPSocket.send(rawBuffer, lengthWritten) ... \r\n");
+        //printf("After CellularNonIPSocket.send(rawBuffer, lengthWritten) ... \r\n");
         
-        if (rc != NSAPI_ERROR_OK)
+        if (rc < 0)
         {
             printf("Error! CellularNonIPSocket.send() to EchoServer returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
@@ -480,11 +480,11 @@ bool LEDLightControl::Send()
     }
     else
     {
-        printf("About to UDPSocket.sendto() ... \r\n");
+        //printf("About to UDPSocket.sendto() ... \r\n");
         nsapi_error_t rc = m_TheSocket.sendto(m_TheSocketAddress, rawBuffer, lengthWritten);
-        printf("After UDPSocket.sendto() ... \r\n");
+        //printf("After UDPSocket.sendto() ... \r\n");
         
-        if (rc != NSAPI_ERROR_OK)
+        if (rc < 0)
         {
             printf("Error! UDPSocket.sendto() to EchoServer returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
@@ -495,7 +495,7 @@ bool LEDLightControl::Send()
         }
     }
     
-    printf("There ... \r\n");
+    //printf("There ... \r\n");
     return result;
 }
 
@@ -522,8 +522,11 @@ bool LEDLightControl::Receive()
                         
             std::string s(receiveBuffer, rc);
             std::string delimiter = ";";
+            
+            printf("Success! m_TheSocket.recv() returned:\
+                [%d] -> %s\n", rc, s.c_str());
                         
-            ParseAndConsumeLightControlMessage(s, delimiter);
+            result = ParseAndConsumeLightControlMessage(s, delimiter);
         }
         else if (rc < 0)
         {
@@ -552,7 +555,10 @@ bool LEDLightControl::Receive()
             std::string s(receiveBuffer, rc);
             std::string delimiter = ";";
                         
-            ParseAndConsumeLightControlMessage(s, delimiter);
+            printf("Success! m_TheSocket.recvfrom() returned:\
+                [%d] -> %s\n", rc, s.c_str());
+                        
+            result = ParseAndConsumeLightControlMessage(s, delimiter);
         }
         else if (rc < 0)
         {
@@ -570,11 +576,12 @@ bool LEDLightControl::Receive()
     return result;
 }
 
-void LEDLightControl::ParseAndConsumeLightControlMessage(std::string& s, 
+bool LEDLightControl::ParseAndConsumeLightControlMessage(std::string& s, 
                                            const std::string& delimiter)
 {    
     printf("Running LEDLightControl::ParseAndConsumeLightControlMessage() ... \r\n");
     
+    auto result = true;
     size_t pos = 0;
     std::string token;
     if ((pos = s.find(delimiter)) != std::string::npos)
@@ -606,35 +613,43 @@ void LEDLightControl::ParseAndConsumeLightControlMessage(std::string& s,
                         {
                             printf("Error! \"s:<1|0>\" comparison failed. \
                                 We rather parsed: \"%s\"\r\n", token.c_str());
+                            result = false;
                         }
                     }
                     else
                     {
                         printf("Error! 3rd occurrence of LightControl \
                             message delimiter parsing failed.\r\n");
+                        result = false;
                     }
                 }
                 else
                 {
                     printf("Error! \"g:001\" comparison failed. \
                         We rather parsed: \"%s\"\r\n", token.c_str());
+                    result = false;
                 }
             }
             else
             {
                 printf("Error! 2nd occurrence of LightControl \
                     message delimiter parsing failed.\r\n");
+                result = false;
             }
         }
         else
         {
             printf("Error! \"t:lights\" comparison failed. \
                 We rather parsed: \"%s\"\r\n", token.c_str());
+            result = false;
         }
     }
     else
     {
         printf("Error! 1st occurrence of LightControl \
             message delimiter parsing failed.\r\n");
+        result = false;
     }
+    
+    return result;
 }

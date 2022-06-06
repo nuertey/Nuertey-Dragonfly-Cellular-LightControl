@@ -70,7 +70,19 @@ static ErrorCodesMap_t gs_ErrorCodesMap = make_error_codes_map();
 
 inline std::string ToString(const nsapi_error_t & key)
 {
-    return (gs_ErrorCodesMap.at(key));
+    std::string result;
+    
+    if (key > 0)
+    {
+        result = std::string("\"Warning! Code does not indicate an error and consequently does not exist in gs_ErrorCodesMap!\"");
+    }
+    else
+    {
+        // std::out_of_range exception if the container does not have an element with the specified key. 
+        result = gs_ErrorCodesMap.at(key);
+    }
+    
+    return result;
 }
     
 namespace Utilities

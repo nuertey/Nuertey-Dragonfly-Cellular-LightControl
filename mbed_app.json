@@ -1,8 +1,4 @@
-{
-    "macros": ["MBED_SYS_STATS_ENABLED=0", 
-               "MBED_HEAP_STATS_ENABLED=0"
-           ],
-    
+{    
     "config": {
         "sock-type": "TCP",
         "echo-server-hostname": {
@@ -27,16 +23,7 @@
         "*": {
             "platform.stdio-baud-rate": 9600,
             "platform.stdio-convert-newlines": true,
-            "platform.error-filename-capture-enabled": 1,
-            "platform.error-all-threads-info": false,
-            "platform.error-hist-enabled": 1,
-            "platform.error-hist-size": 10,
-            "platform.stack-dump-enabled": true,
-            "mbed-trace.enable": 0,
-            "lwip.use-mbed-trace": 1,
-            "lwip.ipv4-enabled": true,
-            "lwip.ethernet-enabled": true,
-            "lwip.tcp-enabled": true
+            "mbed-trace.enable": 0
         }
     }
 }

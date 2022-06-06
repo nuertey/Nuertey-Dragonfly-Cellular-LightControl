@@ -35,30 +35,33 @@ Nuertey-Dragonfly-Cellular-LightControl ( revision in the current branch)
 
 ```console
 ...
-Compile [ 99.9%]: gpio_irq_api.c
-Compile [100.0%]: stm32f7xx_hal_pcd.c
+Compile [ 99.6%]: stm32f7xx_hal_sdram.c
+Compile [ 99.7%]: pwmout_api.c
+Compile [ 99.8%]: mbed_printf_implementation.c
+Compile [ 99.9%]: stm32f7xx_ll_usb.c
+Compile [100.0%]: stm32f7xx_hal_flash.c
 Link: Nuertey-Dragonfly-Cellular-LightControl
 Elf2Bin: Nuertey-Dragonfly-Cellular-LightControl
 | Module               |           .text |       .data |          .bss |
 |----------------------|-----------------|-------------|---------------|
-| [fill]               |       296(+296) |     15(+15) |       63(+63) |
-| [lib]/c.a            |   12428(+12428) | 2472(+2472) |       58(+58) |
+| [fill]               |         46(+46) |       7(+7) |       75(+75) |
+| [lib]/c.a            |     9212(+9212) | 2108(+2108) |       58(+58) |
 | [lib]/gcc.a          |     4740(+4740) |       0(+0) |         0(+0) |
 | [lib]/misc           |       188(+188) |       4(+4) |       28(+28) |
 | [lib]/nosys.a        |         32(+32) |       0(+0) |         0(+0) |
-| [lib]/stdc++.a       |     7520(+7520) |       8(+8) |       44(+44) |
-| main.o               |     5422(+5422) |       1(+1) |       97(+97) |
-| mbed-os/cmsis        |     9862(+9862) |   168(+168) | 14400(+14400) |
-| mbed-os/connectivity |   55598(+55598) |   103(+103) | 23687(+23687) |
-| mbed-os/drivers      |       194(+194) |       0(+0) |         0(+0) |
-| mbed-os/events       |     1606(+1606) |       0(+0) |   3104(+3104) |
-| mbed-os/hal          |     1528(+1528) |       8(+8) |     114(+114) |
-| mbed-os/platform     |     7040(+7040) |   260(+260) |     449(+449) |
-| mbed-os/rtos         |     1244(+1244) |       0(+0) |         8(+8) |
-| mbed-os/targets      |   14058(+14058) |       9(+9) |   1316(+1316) |
-| Subtotals            | 121756(+121756) | 3048(+3048) | 43368(+43368) |
-Total Static RAM memory (data + bss): 46416(+46416) bytes
-Total Flash memory (text + data): 124804(+124804) bytes
+| [lib]/stdc++.a       |     5852(+5852) |       8(+8) |       44(+44) |
+| main.o               |   44604(+44604) |       1(+1) |       57(+57) |
+| mbed-os/cmsis        |   26684(+26684) |   168(+168) |   6336(+6336) |
+| mbed-os/connectivity | 173824(+173824) |   107(+107) | 23691(+23691) |
+| mbed-os/drivers      |     5060(+5060) |       0(+0) |         0(+0) |
+| mbed-os/events       |     4476(+4476) |       0(+0) |   3104(+3104) |
+| mbed-os/hal          |     4244(+4244) |       8(+8) |     114(+114) |
+| mbed-os/platform     |   28716(+28716) |   260(+260) |     381(+381) |
+| mbed-os/rtos         |     3448(+3448) |       0(+0) |         8(+8) |
+| mbed-os/targets      |   28010(+28010) |       9(+9) |   1304(+1304) |
+| Subtotals            | 339136(+339136) | 2680(+2680) | 35200(+35200) |
+Total Static RAM memory (data + bss): 37880(+37880) bytes
+Total Flash memory (text + data): 341816(+341816) bytes
 
 Image: ./BUILD/NUCLEO_F767ZI/GCC_ARM-MY_PROFILE/Nuertey-Dragonfly-Cellular-LightControl.bin
 
@@ -84,6 +87,57 @@ Lacking an actual MultiTech Dragonfly Nano dev board and associated cellular mod
     }
 ```
 
+## Execution Output Snippet:
+
+```
+Nuertey-Dragonfly-Cellular-LightControl Application - Beginning... 
+
+Mbed OS version: 6.15.1
+
+Built: Jun  6 2022, 15:14:53
+
+Running LEDLightControl::Setup() ... 
+Running LEDLightControl::ConnectToSocket() ... 
+Particular Network Interface IP address: 10.42.0.58
+Particular Network Interface Netmask: 255.255.255.0
+Particular Network Interface Gateway: 10.42.0.1
+Particular Network Interface MAC Address: 00:80:e1:37:00:25
+
+Resolve hostname echo.mbedcloudtesting.com
+Running LWIP::socket_sendto_control ... 
+echo.mbedcloudtesting.com address is 52.215.34.155
+Connecting to "echo.mbedcloudtesting.com" as resolved to: "52.215.34.155:7" ...
+Success! Connected to EchoServer at "echo.mbedcloudtesting.com" as resolved to: "52.215.34.155:7"
+Running LEDLightControl::Run() ... 
+Running LEDLightControl::Send() ... 
+After MBED_ASSERT on lengthWritten. lengthWritten = 20
+t:lights;g:001;s:1;
+Running TCPSocket::send ... 
+Running LWIP::socket_send ... 
+After TCPSocket.send(rawBuffer, lengthWritten). rc = [20] 
+Running LEDLightControl::Receive() ... 
+Success! m_TheSocket.recv() returned:                [20] -> t:lights;g:001;s:1;
+Running LEDLightControl::ParseAndConsumeLightControlMessage() ... 
+Running LEDLightControl::Send() ... 
+After MBED_ASSERT on lengthWritten. lengthWritten = 20
+t:lights;g:001;s:0;
+Running TCPSocket::send ... 
+Running LWIP::socket_send ... 
+After TCPSocket.send(rawBuffer, lengthWritten). rc = [20] 
+Running LEDLightControl::Receive() ... 
+Success! m_TheSocket.recv() returned:                [20] -> t:lights;g:001;s:0;
+Running LEDLightControl::ParseAndConsumeLightControlMessage() ... 
+Running LEDLightControl::Send() ... 
+After MBED_ASSERT on lengthWritten. lengthWritten = 20
+t:lights;g:001;s:1;
+Running TCPSocket::send ... 
+Running LWIP::socket_send ... 
+After TCPSocket.send(rawBuffer, lengthWritten). rc = [20] 
+Running LEDLightControl::Receive() ... 
+Success! m_TheSocket.recv() returned:                [20] -> t:lights;g:001;s:1;
+Running LEDLightControl::ParseAndConsumeLightControlMessage() ... 
+Running LEDLightControl::Send() ... 
+```
 
 ## License
 MIT License

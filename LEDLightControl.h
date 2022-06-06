@@ -239,9 +239,6 @@ void LEDLightControl::Setup()
              "Hey! Mesh Network branch DELIBERATELY unimplemented as it is out of scope!!!");
     }
     
-    // TBD Nuertey Odzeyem; remove all superfluous comments and clean up
-    // the implementation once class is tested and proven to be working.
-    
     ConnectToNetworkInterface<transport, socket>();
 }
 
@@ -330,32 +327,21 @@ void LEDLightControl::ConnectToSocket()
     
     if (m_TheTransportSocketType != TransportSocket_t::CELLULAR_NON_IP)
     {
-        //auto ipAddress = Utilities::ResolveAddressIfDomainName(m_EchoServerDomainName
-        //                                                     , m_pNetworkInterface
-        //                                                     , &m_TheSocketAddress);
-        //
-        //if (ipAddress)
-        //{
-        //    std::swap(m_EchoServerAddress, ipAddress);
-        //}
-        //else
-        //{
-        //    printf("Error! Utility::ResolveAddressIfDomainName() failed.\r\n");
-        //
-        //    // Abandon attempting to connect to the socket. 
-        //    return; 
-        //}
+        auto ipAddress = Utilities::ResolveAddressIfDomainName(m_EchoServerDomainName
+                                                             , m_pNetworkInterface
+                                                             , &m_TheSocketAddress);
         
-        printf("\nResolve hostname %s\r\n", m_EchoServerDomainName.c_str());
-        nsapi_size_or_error_t result = m_pNetworkInterface->gethostbyname(m_EchoServerDomainName.c_str(), &m_TheSocketAddress);
-        if (result != 0) 
+        if (ipAddress)
         {
-            printf("Error! gethostbyname(%s) returned: %d\r\n", m_EchoServerDomainName.c_str(), result);
-            return;
+            std::swap(m_EchoServerAddress, ipAddress);
         }
-
-        printf("%s address is %s\r\n", m_EchoServerDomainName.c_str(), (m_TheSocketAddress.get_ip_address() ? m_TheSocketAddress.get_ip_address() : "None") );
-        m_EchoServerAddress = m_TheSocketAddress.get_ip_address();
+        else
+        {
+            printf("Error! Utility::ResolveAddressIfDomainName() failed.\r\n");
+        
+            // Abandon attempting to connect to the socket. 
+            return; 
+        }
         
         m_TheSocketAddress.set_port(m_EchoServerPort);
 
@@ -415,7 +401,7 @@ void LEDLightControl::Run()
 
 bool LEDLightControl::Send()
 {    
-    printf("Running LEDLightControl::Send() ... \r\n");
+    //printf("Running LEDLightControl::Send() ... \r\n");
     
     auto result = false;
     char rawBuffer[STANDARD_BUFFER_SIZE];
@@ -443,13 +429,11 @@ bool LEDLightControl::Send()
     MBED_ASSERT(lengthWritten > 0);
     MBED_ASSERT(lengthWritten < sizeof(rawBuffer));
     
-    printf("After MBED_ASSERT on lengthWritten. lengthWritten = %d\n%s\r\n", lengthWritten, rawBuffer);
+    //printf("After MBED_ASSERT on lengthWritten. lengthWritten = %d\n%s\r\n", lengthWritten, rawBuffer);
 
     if (m_TheTransportSocketType == TransportSocket_t::TCP)
     {        
-        //printf("About to TCPSocket.send(rawBuffer, lengthWritten) ... \r\n");
         nsapi_error_t rc = m_TheSocket.send(rawBuffer, lengthWritten);
-        printf("After TCPSocket.send(rawBuffer, lengthWritten). rc = [%d] \r\n", rc);
         
         if (rc < 0)
         {
@@ -459,14 +443,11 @@ bool LEDLightControl::Send()
         else
         {
             result = true;
-            //printf("Here ... \r\n");
         }
     }
     else if (m_TheTransportSocketType == TransportSocket_t::CELLULAR_NON_IP)
     {
-        //printf("About to CellularNonIPSocket.send(rawBuffer, lengthWritten) ... \r\n");
         nsapi_error_t rc = m_TheSocket.send(rawBuffer, lengthWritten);
-        //printf("After CellularNonIPSocket.send(rawBuffer, lengthWritten) ... \r\n");
         
         if (rc < 0)
         {
@@ -480,9 +461,7 @@ bool LEDLightControl::Send()
     }
     else
     {
-        //printf("About to UDPSocket.sendto() ... \r\n");
         nsapi_error_t rc = m_TheSocket.sendto(m_TheSocketAddress, rawBuffer, lengthWritten);
-        //printf("After UDPSocket.sendto() ... \r\n");
         
         if (rc < 0)
         {
@@ -495,13 +474,12 @@ bool LEDLightControl::Send()
         }
     }
     
-    //printf("There ... \r\n");
     return result;
 }
 
 bool LEDLightControl::Receive()
 {
-    printf("Running LEDLightControl::Receive() ... \r\n");
+    //printf("Running LEDLightControl::Receive() ... \r\n");
     
     auto result = false;
     char receiveBuffer[STANDARD_BUFFER_SIZE];
@@ -579,7 +557,7 @@ bool LEDLightControl::Receive()
 bool LEDLightControl::ParseAndConsumeLightControlMessage(std::string& s, 
                                            const std::string& delimiter)
 {    
-    printf("Running LEDLightControl::ParseAndConsumeLightControlMessage() ... \r\n");
+    //printf("Running LEDLightControl::ParseAndConsumeLightControlMessage() ... \r\n");
     
     auto result = true;
     size_t pos = 0;
@@ -603,10 +581,12 @@ bool LEDLightControl::ParseAndConsumeLightControlMessage(std::string& s,
                         token = s.substr(0, pos);
                         if (!token.compare("s:0"))
                         {
+                            printf("Successfully parsed LightControl message. Turning LED OFF ... \r\n");
                             g_UserLED = LED_OFF;
                         }
                         else if (!token.compare("s:1"))
                         {
+                            printf("Successfully parsed LightControl message. Turning LED ON ... \r\n");
                             g_UserLED = LED_ON;
                         }
                         else

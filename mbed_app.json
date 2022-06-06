@@ -4,10 +4,10 @@
            ],
     
     "config": {
-        "sock-type": "NUERTEY_TCP",
+        "sock-type": "TCP",
         "echo-server-hostname": {
             "help": "Echo server host name.",
-            "value": "\"10.42.0.1\""
+            "value": "\"echo.mbedcloudtesting.com\""
         },
         "echo-server-port": {
             "help": "Echo server port number.",
@@ -32,12 +32,11 @@
             "platform.error-hist-enabled": 1,
             "platform.error-hist-size": 10,
             "platform.stack-dump-enabled": true,
-            "mbed-trace.enable": 1,
+            "mbed-trace.enable": 0,
             "lwip.use-mbed-trace": 1,
             "lwip.ipv4-enabled": true,
             "lwip.ethernet-enabled": true,
-            "lwip.tcp-enabled": true,
-            "events.shared-dispatch-from-application": true
+            "lwip.tcp-enabled": true
         }
     }
 }

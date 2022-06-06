@@ -30,7 +30,7 @@
 
 #include "mbed.h"
 #include "mbed_assert.h"
-#include "mbed_events.h"
+//#include "mbed_events.h"
 #include "mbed_trace.h"
 #include "randLIB.h"
 
@@ -95,34 +95,6 @@ concept IsValidTransportType = (((transport == TransportScheme_t::CELLULAR_4G_LT
 DigitalOut g_UserLED(LED1);
 bool       g_UserLEDState{false};  // Logically, the board will bootup with the LED off.
 
-// Protect the platform STDIO object so it is shared politely between 
-// threads, periodic events and periodic callbacks (not hopefully in IRQ context
-// but when safely translated into, say, an EventQueue context). Essentially,
-// ensure our output does not come out garbled on the serial terminal.
-PlatformMutex g_STDIOMutex; 
-
-// OPTION 1: (DO NOT USE THIS OPTION AS YOU WILL EXHAUST THE STACK AND CRASH!!!)
-//
-// Use static EventQueue to prevent your program from failing due to 
-// queue memory exhaustion or to prevent dynamic memory allocation. Note
-// that it will only accept user allocated events.
-//static EventQueue g_SharedEventQueue(0); // Definitely created on the stack!
-
-// OPTION 2:
-//
-// To further save RAM, if you have no other work to do in your main 
-// function after initialization, you can dispatch the global event queue
-// from there, avoiding the need to create a separate dispatch thread.
-EventQueue *g_pSharedEventQueue = mbed_event_queue(); // Request a shared EventQueue, and definitely on the heap!
-
-// Forward declarations:
-class LEDLightControl;
-
-extern LEDLightControl * g_pLEDLightControlManager;
-bool g_IsConnected{false};
-
-void NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t parameterPointerData);
-
 class LEDLightControl
 {   
     // 1 minute of failing to exchange packets with the EchoServer ought
@@ -130,7 +102,7 @@ class LEDLightControl
     static constexpr int32_t BLOCKING_SOCKET_TIMEOUT_MILLISECONDS{60000};
     static constexpr uint8_t MASTER_LIGHT_CONTROL_GROUP{0};
     static constexpr uint8_t     MY_LIGHT_CONTROL_GROUP{1};
-    static constexpr uint32_t STANDARD_BUFFER_SIZE{1024}; // 1K ought to cover all our cases.
+    static constexpr uint32_t STANDARD_BUFFER_SIZE{40}; // 1K ought to cover all our cases.
     
 public:
     LEDLightControl();
@@ -176,8 +148,14 @@ private:
     // TCP - Connection-oriented IP.
     // UDP - Connection-less IP.
     // CellularNonIP - 3GPP non-IP datagrams (NIDD) using the cellular IoT feature.
-    Socket *                  m_pTheSocket;
-    SocketAddress             m_TheSocketAddress;
+#if MBED_CONF_APP_SOCK_TYPE == TCP
+    TCPSocket                  m_TheSocket;
+#elif MBED_CONF_APP_SOCK_TYPE == UDP
+    UDPSocket                  m_TheSocket;
+#elif MBED_CONF_APP_SOCK_TYPE == NONIP
+    CellularNonIPSocket        m_TheSocket;
+#endif
+    SocketAddress              m_TheSocketAddress;
 };
 
 LEDLightControl::LEDLightControl()
@@ -190,24 +168,9 @@ LEDLightControl::LEDLightControl()
 LEDLightControl::~LEDLightControl()
 {
     // Proper housekeeping...
-    if (m_pTheSocket)
-    {
-        [[maybe_unused]] auto unused_return_1 = m_pTheSocket->close();
-        delete m_pTheSocket;
-        
-        // Per issues discussed in the link below, proactively ensuring
-        // that I don't run into any issues with MbedOS.  
-        m_pTheSocket = nullptr; 
-    }
-    
     if (m_pNetworkInterface)
     {
         [[maybe_unused]] auto unused_return_2 = m_pNetworkInterface->disconnect();
-    }
-    
-    if (g_pSharedEventQueue)
-    {
-        g_pSharedEventQueue->break_dispatch();
     }
     
     trace_close();
@@ -276,25 +239,8 @@ void LEDLightControl::Setup()
              "Hey! Mesh Network branch DELIBERATELY unimplemented as it is out of scope!!!");
     }
     
-    // Asynchronously monitor for Network Status events:
-    m_pNetworkInterface->attach(callback(NetworkStatusCallback));
-    
-    // "Attach to network so we can get update status from the network"
-    // _nw->attach(callback(this, &CellularDevice::cellular_callback));
-    
-    // Apropos "gedit ./mbed-os/connectivity/cellular/include/cellular/framework/API/CellularDevice.h":
-    //
-    // 
-    // /** Cellular callback to be attached to Network and CellularStateMachine classes.
-    //  *  CellularContext calls this when in PPP mode to provide network changes.
-    //  *  This method will broadcast to every interested classes:
-    //  *  CellularContext (might be many) and CellularStateMachine if available.
-    //  */
-    // virtual void cellular_callback(nsapi_event_t ev, intptr_t ptr, CellularContext *ctx = NULL);
-    
     // TBD Nuertey Odzeyem; remove all superfluous comments and clean up
-    // the implementation once class is tested and proven to be working
-    // like the below:
+    // the implementation once class is tested and proven to be working.
     
     ConnectToNetworkInterface<transport, socket>();
 }
@@ -308,44 +254,17 @@ void LEDLightControl::ConnectToNetworkInterface()
     m_TheTransportSchemeType = transport;
     m_TheTransportSocketType = socket;    
 
-    // "Asynchronous operation
-    // 
-    // NetworkInterface::connect() and NetworkInterface::disconnect() are blocking
-    // by default. When an application prefers asynchronous operation, it can set
-    // the interface into nonblocking mode by calling NetworkInterface::set_blocking(false).
-    // This has to be done for each interface separately.
-    // 
-    // When an interface operates in asynchronous mode, the return values of connect()
-    // and disconnect() have slightly different meanings. Calling connect() starts the
-    // asynchronous operation, which puts the device in the GLOBAL_UP state. Calling
-    // disconnect() puts the target in the DISCONNECTED state. Return code in 
-    // asynchronous mode does not reflect the connection status. The most common 
-    // return codes in asynchronous mode is NSAPI_ERROR_OK, which means that operation
-    // just started. Please refer to the Doxygen documentation of NetworkInterface::connect()
-    // and NetworkInterface::disconnect() for return values of these functions.
-    // 
-    // To check whether the interface is connected, the application needs to register 
-    // the status callback for the interface. Please refer to the Network status API
-    // for information on how to do so."
-    //
-    // https://os.mbed.com/docs/mbed-os/v6.15/apis/network-interface.html
-    m_pNetworkInterface->set_blocking(false);
-    [[maybe_unused]] auto asynchronous_connect_return_perhaps_can_be_safely_ignored \
-                                           = m_pNetworkInterface->connect();
-      
-    // Setup complete, so we can now dispatch the shared event queue forever:
+    auto rc = m_pNetworkInterface->connect();
+
+    if (rc != NSAPI_ERROR_OK)
+    {
+        printf("Error! NetworkInterface->connect() returned: \
+            [%d] -> %s\r\n", rc, ToString(rc).c_str());
+               
+        return;
+    }      
     
-    // We will never return from the call below, as events are executed by 
-    // the dispatch_forever method.
-    if (g_pSharedEventQueue)
-    {
-        g_pSharedEventQueue->dispatch_forever();
-    }
-    else
-    {
-        assert(((void)"Such a thing ought to never happen but unfortunately (whom knows why?), g_pSharedEventQueue is nullptr!!", \
-            (g_pSharedEventQueue != nullptr)));
-    }
+    ConnectToSocket();
 }
 
 void LEDLightControl::ConnectToSocket()
@@ -370,83 +289,73 @@ void LEDLightControl::ConnectToSocket()
     //
     // - Cellular Non-IP socket for which the data delivery path is decided
     //   by network's control plane CIoT optimisation setup, for the given APN.
-    if (m_TheTransportSocketType == TransportSocket_t::TCP)
+#if MBED_CONF_APP_SOCK_TYPE == TCP        
+    nsapi_error_t rc = m_TheSocket.open(m_pNetworkInterface);
+    if (rc != NSAPI_ERROR_OK)
     {
-        // Portable way of using the Abstract base class Socket to refer
-        // to any particular derived socket type.
-        m_pTheSocket = new TCPSocket();
-        
-        nsapi_error_t rc = dynamic_cast<TCPSocket *>(m_pTheSocket)->open(m_pNetworkInterface);
-        if (rc != NSAPI_ERROR_OK)
-        {
-            printf("Error! TCPSocket.open() returned: \
-                [%d] -> %s\r\n", rc, ToString(rc).c_str());
+        printf("Error! TCPSocket.open() returned: \
+            [%d] -> %s\r\n", rc, ToString(rc).c_str());
 
-            // Abandon attempting to connect to the socket. Subsequent 
-            // NetworkStatusCallbacks() will dispatch the ConnectToSocket()
-            // event again should network conditions become better favorable.                
-            return;
-        }
+        // Abandon attempting to connect to the socket. 
+        return;
     }
-    else if (m_TheTransportSocketType == TransportSocket_t::UDP)
+#elif MBED_CONF_APP_SOCK_TYPE == UDP    
+    nsapi_error_t rc = m_TheSocket.open(m_pNetworkInterface);
+    if (rc != NSAPI_ERROR_OK)
     {
-        m_pTheSocket = new UDPSocket();
-        
-        nsapi_error_t rc = dynamic_cast<UDPSocket *>(m_pTheSocket)->open(m_pNetworkInterface);
-        if (rc != NSAPI_ERROR_OK)
-        {
-            printf("Error! UDPSocket.open() returned: \
-                [%d] -> %s\r\n", rc, ToString(rc).c_str());
+        printf("Error! UDPSocket.open() returned: \
+            [%d] -> %s\r\n", rc, ToString(rc).c_str());
 
-            // Abandon attempting to connect to the socket. Subsequent 
-            // NetworkStatusCallbacks() will dispatch the ConnectToSocket()
-            // event again should network conditions become better favorable.                
-            return;
-        }
+        // Abandon attempting to connect to the socket.                
+        return;
     }
-    else if (m_TheTransportSocketType == TransportSocket_t::CELLULAR_NON_IP)
+#elif MBED_CONF_APP_SOCK_TYPE == NONIP        
+    nsapi_error_t rc = m_TheSocket.open(m_pNetworkInterface);
+    if (rc != NSAPI_ERROR_OK)
     {
-        m_pTheSocket = new CellularNonIPSocket();
-        
-        nsapi_error_t rc = dynamic_cast<CellularNonIPSocket *>(m_pTheSocket)->open(dynamic_cast<CellularContext *>(m_pNetworkInterface));
-        if (rc != NSAPI_ERROR_OK)
-        {
-            printf("Error! CellularNonIPSocket.open() returned: \
-                [%d] -> %s\r\n", rc, ToString(rc).c_str());
+        printf("Error! CellularNonIPSocket.open() returned: \
+            [%d] -> %s\r\n", rc, ToString(rc).c_str());
 
-            // Abandon attempting to connect to the socket. Subsequent 
-            // NetworkStatusCallbacks() will dispatch the ConnectToSocket()
-            // event again should network conditions become better favorable.                
-            return;
-        }
-    }  
+        // Abandon attempting to connect to the socket.   
+        return;
+    }
+#endif  
     
     // Set timeout on blocking socket operations.
     //
     // Initially all sockets have unbounded timeouts. NSAPI_ERROR_WOULD_BLOCK
     // is returned if a blocking operation takes longer than the specified timeout.
-    m_pTheSocket->set_blocking(true);
-    m_pTheSocket->set_timeout(BLOCKING_SOCKET_TIMEOUT_MILLISECONDS);
+    m_TheSocket.set_blocking(true);
+    m_TheSocket.set_timeout(BLOCKING_SOCKET_TIMEOUT_MILLISECONDS);
     
     if (m_TheTransportSocketType != TransportSocket_t::CELLULAR_NON_IP)
     {
-        auto ipAddress = Utilities::ResolveAddressIfDomainName(m_EchoServerDomainName
-                                                             , m_pNetworkInterface
-                                                             , &m_TheSocketAddress);
+        //auto ipAddress = Utilities::ResolveAddressIfDomainName(m_EchoServerDomainName
+        //                                                     , m_pNetworkInterface
+        //                                                     , &m_TheSocketAddress);
+        //
+        //if (ipAddress)
+        //{
+        //    std::swap(m_EchoServerAddress, ipAddress);
+        //}
+        //else
+        //{
+        //    printf("Error! Utility::ResolveAddressIfDomainName() failed.\r\n");
+        //
+        //    // Abandon attempting to connect to the socket. 
+        //    return; 
+        //}
         
-        if (ipAddress)
+        printf("\nResolve hostname %s\r\n", m_EchoServerDomainName.c_str());
+        nsapi_size_or_error_t result = m_pNetworkInterface->gethostbyname(m_EchoServerDomainName.c_str(), &m_TheSocketAddress);
+        if (result != 0) 
         {
-            std::swap(m_EchoServerAddress, ipAddress);
+            printf("Error! gethostbyname(%s) returned: %d\r\n", m_EchoServerDomainName.c_str(), result);
+            return;
         }
-        else
-        {
-            printf("Error! Utility::ResolveAddressIfDomainName() failed.\r\n");
 
-            // Abandon attempting to connect to the socket. Subsequent 
-            // NetworkStatusCallbacks() will dispatch the ConnectToSocket()
-            // event again should network conditions become better favorable.                
-            return; 
-        }
+        printf("%s address is %s\r\n", m_EchoServerDomainName.c_str(), (m_TheSocketAddress.get_ip_address() ? m_TheSocketAddress.get_ip_address() : "None") );
+        m_EchoServerAddress = m_TheSocketAddress.get_ip_address();
         
         m_TheSocketAddress.set_port(m_EchoServerPort);
 
@@ -457,16 +366,14 @@ void LEDLightControl::ConnectToSocket()
                 m_EchoServerAddress.value().c_str(), 
                 m_EchoServerPort);
                 
-            nsapi_error_t rc = m_pTheSocket->connect(m_TheSocketAddress);
+            nsapi_error_t rc = m_TheSocket.connect(m_TheSocketAddress);
 
             if (rc != NSAPI_ERROR_OK)
             {
                 printf("Error! TCPSocket.connect() to EchoServer returned:\
                     [%d] -> %s\n", rc, ToString(rc).c_str());
                     
-                // Abandon attempting to connect to the socket. Subsequent 
-                // NetworkStatusCallbacks() will dispatch the ConnectToSocket()
-                // event again should network conditions become better favorable.                
+                // Abandon attempting to connect to the socket.
                 return;
             }
             else
@@ -477,9 +384,6 @@ void LEDLightControl::ConnectToSocket()
         }
     }
     
-    // TBD Nuertey Odzeyem; to debug my Ubuntu Ethernet port since it is 
-    // having issues, do not send or receive for now on the socket. Just
-    // establish the connection so that I can query it on the Ubuntu peer.
     Run();
 }
 
@@ -487,7 +391,7 @@ void LEDLightControl::Run()
 {    
     printf("Running LEDLightControl::Run() ... \r\n");
     
-    while (g_IsConnected)
+    while (true)
     {
         if (Send())
         {
@@ -506,9 +410,7 @@ void LEDLightControl::Run()
         }
     }
     
-    // Abandon exchanging packets with the EchoServer. Subsequent 
-    // NetworkStatusCallbacks() will dispatch the ConnectToSocket()
-    // event again should network conditions become better favorable. 
+    // Abandon exchanging packets with the EchoServer. 
 }
 
 bool LEDLightControl::Send()
@@ -536,28 +438,22 @@ bool LEDLightControl::Send()
                                   sizeof(rawBuffer), 
                                   "t:lights;g:%03d;s:%s;", 
                                   MY_LIGHT_CONTROL_GROUP, 
-                                  (g_UserLEDState ? "1" : "0")) + 1; // Ensure to account for terminating NUL.
+                                  (g_UserLEDState ? "1" : "0"));
     
-    printf("About to MBED_ASSERT on lengthWritten. lengthWritten = %d\n%s\r\n", lengthWritten, rawBuffer);
-
     MBED_ASSERT(lengthWritten > 0);
-    
+    MBED_ASSERT(lengthWritten < sizeof(rawBuffer));
+
+    printf("After MBED_ASSERT on lengthWritten. lengthWritten = %d\n%s\r\n", lengthWritten, rawBuffer);
+
     if (m_TheTransportSocketType == TransportSocket_t::TCP)
-    {
-        // Testing and debugging code:
-        //char sbuffer[] = "GET / HTTP/1.1\r\nHost: ifconfig.io\r\n\r\n";
-        //int scount = socket.send(sbuffer, sizeof sbuffer);
-        //printf("sent %d [%.*s]\n", scount, strstr(sbuffer, "\r\n") - sbuffer, sbuffer);
-        // End testing and debugging code.
-        
-        printf("About to TCPSocket->send(rawBuffer, lengthWritten) ... \r\n");
-        //nsapi_error_t rc = dynamic_cast<TCPSocket *>(m_pTheSocket)->send(sbuffer, sizeof sbuffer);
-        nsapi_error_t rc = dynamic_cast<TCPSocket *>(m_pTheSocket)->send(rawBuffer, lengthWritten);
-        printf("After TCPSocket->send(rawBuffer, lengthWritten). rc = [%d] \r\n", rc);
+    {        
+        printf("About to TCPSocket.send(rawBuffer, lengthWritten) ... \r\n");
+        nsapi_error_t rc = m_TheSocket.send(rawBuffer, lengthWritten);
+        printf("After TCPSocket.send(rawBuffer, lengthWritten). rc = [%d] \r\n", rc);
         
         if (rc != NSAPI_ERROR_OK)
         {
-            printf("Error! TCPSocket->send() to EchoServer returned:\
+            printf("Error! TCPSocket.send() to EchoServer returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
         }
         else
@@ -568,13 +464,13 @@ bool LEDLightControl::Send()
     }
     else if (m_TheTransportSocketType == TransportSocket_t::CELLULAR_NON_IP)
     {
-        printf("About to CellularNonIPSocket->send(rawBuffer, lengthWritten) ... \r\n");
-        nsapi_error_t rc = dynamic_cast<CellularNonIPSocket *>(m_pTheSocket)->send(rawBuffer, lengthWritten);
-        printf("After CellularNonIPSocket->send(rawBuffer, lengthWritten) ... \r\n");
+        printf("About to CellularNonIPSocket.send(rawBuffer, lengthWritten) ... \r\n");
+        nsapi_error_t rc = m_TheSocket.send(rawBuffer, lengthWritten);
+        printf("After CellularNonIPSocket.send(rawBuffer, lengthWritten) ... \r\n");
         
         if (rc != NSAPI_ERROR_OK)
         {
-            printf("Error! CellularNonIPSocket->send() to EchoServer returned:\
+            printf("Error! CellularNonIPSocket.send() to EchoServer returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
         }
         else
@@ -584,13 +480,13 @@ bool LEDLightControl::Send()
     }
     else
     {
-        printf("About to UDPSocket->sendto() ... \r\n");
-        nsapi_error_t rc = dynamic_cast<UDPSocket *>(m_pTheSocket)->sendto(m_TheSocketAddress, rawBuffer, lengthWritten);
-        printf("After UDPSocket->sendto() ... \r\n");
+        printf("About to UDPSocket.sendto() ... \r\n");
+        nsapi_error_t rc = m_TheSocket.sendto(m_TheSocketAddress, rawBuffer, lengthWritten);
+        printf("After UDPSocket.sendto() ... \r\n");
         
         if (rc != NSAPI_ERROR_OK)
         {
-            printf("Error! UDPSocket->sendto() to EchoServer returned:\
+            printf("Error! UDPSocket.sendto() to EchoServer returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
         }
         else
@@ -614,7 +510,7 @@ bool LEDLightControl::Receive()
     
     if (m_TheTransportSocketType != TransportSocket_t::UDP)
     {
-        nsapi_size_or_error_t rc = m_pTheSocket->recv(receiveBuffer, 
+        nsapi_size_or_error_t rc = m_TheSocket.recv(receiveBuffer, 
                                                     sizeof(receiveBuffer) - 1);
         
         
@@ -631,19 +527,19 @@ bool LEDLightControl::Receive()
         }
         else if (rc < 0)
         {
-            printf("Error! m_pTheSocket->recv() returned:\
+            printf("Error! m_TheSocket.recv() returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
         }
         else
         {
-            printf("Error! m_pTheSocket->recv() indicated :\n\t\
+            printf("Error! m_TheSocket.recv() indicated :\n\t\
                 \"No data available to be received and the peer has \
                 performed an orderly shutdown.\"\n");
         }
     }
     else
     {
-        nsapi_size_or_error_t rc = m_pTheSocket->recvfrom(&m_TheSocketAddress, 
+        nsapi_size_or_error_t rc = m_TheSocket.recvfrom(&m_TheSocketAddress, 
                                                         receiveBuffer, 
                                                         sizeof(receiveBuffer) - 1);
         
@@ -660,12 +556,12 @@ bool LEDLightControl::Receive()
         }
         else if (rc < 0)
         {
-            printf("Error! m_pTheSocket->recvfrom() returned:\
+            printf("Error! m_TheSocket.recvfrom() returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
         }
         else
         {
-            printf("Error! m_pTheSocket->recvfrom() indicated :\n\t\
+            printf("Error! m_TheSocket.recvfrom() indicated :\n\t\
                 \"No data available to be received and the peer has \
                 performed an orderly shutdown.\"\n");
         }
@@ -740,142 +636,5 @@ void LEDLightControl::ParseAndConsumeLightControlMessage(std::string& s,
     {
         printf("Error! 1st occurrence of LightControl \
             message delimiter parsing failed.\r\n");
-    }
-}
-
-// Create a user allocated event to be later bound:
-//auto event1 = make_user_allocated_event(g_pLEDLightControlManager, 
-                                        //&LEDLightControl::ConnectToSocket);
-
-void NetworkStatusCallback(nsapi_event_t statusEvent, intptr_t parameterPointerData)
-{    
-    // TBD Nuertey Odzeyem; verify with testing whether this assertion 
-    // is needed, and if it is here, will it negatively affect the "workings"
-    // of the Cellular network.
-    //assert(statusEvent == NSAPI_EVENT_CONNECTION_STATUS_CHANGE);
-
-    switch (parameterPointerData)
-    {
-        case NSAPI_STATUS_LOCAL_UP:
-        {
-            g_STDIOMutex.lock();
-            printf("Local IP address set!\r\n");
-            g_STDIOMutex.unlock();
-            break;
-        }
-        case NSAPI_STATUS_GLOBAL_UP:
-        {
-            g_STDIOMutex.lock();
-            printf("Global IP address set!\r\n");
-            g_IsConnected = true;
-            g_STDIOMutex.unlock();
-            
-            // Post the asynchronously notified network status change on the shared event
-            // queue so that its actions can be scheduled and complete in synchronous
-            // thread mode instead of in interrupt (i.e. callback) mode.
-            
-            // bind & post
-            //event1.call_on(&g_SharedEventQueue); // OPTION 1 only permitted way of invoking.
-            g_pSharedEventQueue->call(g_pLEDLightControlManager, 
-                                       &LEDLightControl::ConnectToSocket); // OPTION 2 way.
-            
-            // Note that the EventQueue has no concept of event priority. 
-            // If you schedule events to run at the same time, the order in
-            // which the events run relative to one another is undefined. 
-            // The EventQueue only schedules events based on time.
-            break;
-        }
-        case NSAPI_STATUS_DISCONNECTED:
-        {
-            g_STDIOMutex.lock();
-            printf("NetworkInterface disconnected!\r\n");
-            g_IsConnected = false;
-            g_STDIOMutex.unlock();
-            
-            //tr_debug("Network Status Event Callback: %d, \t\r\nparameterPointerData: %d", \
-            //    statusEvent, parameterPointerData);
-                
-            if (statusEvent == NSAPI_EVENT_CONNECTION_STATUS_CHANGE) //&& parameterPointerData == NSAPI_STATUS_DISCONNECTED)
-            {
-                // we have been disconnected, reset state machine so that application can start connect sequence again
-                // if (_state_machine)
-                // {
-                //  _state_machine->reset();
-                // }
-            }
-            break;
-        }
-        case NSAPI_STATUS_CONNECTING:
-        {
-            g_STDIOMutex.lock();
-            printf("Connecting to network ...\r\n");
-            g_STDIOMutex.unlock();
-            break;
-        }
-        default:
-        {
-            g_STDIOMutex.lock();
-            printf("Perhaps New Cellular Pointer Data Codes Have Asynchronously Arrived:\r\n");
-            g_STDIOMutex.unlock();
-            
-            if (statusEvent >= NSAPI_EVENT_CELLULAR_STATUS_BASE && statusEvent <= NSAPI_EVENT_CELLULAR_STATUS_END)
-            {
-                cell_callback_data_t *ptr_data = (cell_callback_data_t *)parameterPointerData;
-                
-                tr_debug("Network Status Event Callback: %d, \t\r\nptr_data->error: %d, \t\r\nptr_data->status_data: %d", \
-                    statusEvent, ptr_data->error, ptr_data->status_data);
-                
-                cellular_connection_status_t cellEvent = static_cast<cellular_connection_status_t>(statusEvent);
-                
-                //if (cellEvent == CellularRegistrationStatusChanged)
-                //{
-                //    // broadcast only network registration changes to state machine
-                //    //_state_machine->cellular_event_changed(ev, ptr);
-                //}
-
-                if (cellEvent == CellularDeviceReady && ptr_data->error == NSAPI_ERROR_OK)
-                {
-                    // // Here we can create mux and give new filehandles as mux reserves the one what was in use.
-                    // // if mux we would need to set new filehandle:_state_machine->set_filehandle( get fh from mux);
-                    // _nw = open_network(_fh);
-                    // // Attach to network so we can get update status from the network
-                    // _nw->attach(callback(this, &CellularDevice::cellular_callback));
-                    // if (strlen(_plmn))
-                    // {
-                    //     _state_machine->set_plmn(_plmn);
-                    // }
-
-                    // TBD Nuertey Odzeyem; should it be like this in this
-                    // state of the Cellular state machine? 
-                    // Confirm with testing...:
-                    g_STDIOMutex.lock();
-                    g_IsConnected = true;
-                    g_STDIOMutex.unlock();
-
-                    // Post the asynchronously notified network status change on the shared event
-                    // queue so that its actions can be scheduled and complete in synchronous
-                    // thread mode instead of in interrupt (callback) mode.
-                
-                    // bind & post
-                    //event1.call_on(&g_SharedEventQueue); // OPTION 1 only permitted way of invoking.
-                    g_pSharedEventQueue->call(g_pLEDLightControlManager, 
-                                               &LEDLightControl::ConnectToSocket); // OPTION 2 way.
-                    
-                    // Note that the EventQueue has no concept of event priority. 
-                    // If you schedule events to run at the same time, the order in
-                    // which the events run relative to one another is undefined. 
-                    // The EventQueue only schedules events based on time.
-                }
-                //else if (cellEvent == CellularSIMStatusChanged && ptr_data->error == NSAPI_ERROR_OK &&
-                //         ptr_data->status_data == CellularSIM::SimStatePinNeeded)
-                //{
-                //    // if (strlen(_sim_pin))
-                //    // {
-                //    //     _state_machine->set_sim_pin(_sim_pin);
-                //    // }
-                //}
-            }
-            break;
-        }
     }
 }

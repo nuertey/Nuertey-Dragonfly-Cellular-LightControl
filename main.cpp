@@ -70,12 +70,12 @@ int main()
         
     if (g_MCUTarget == MCUTarget_t::MTS_DRAGONFLY_L471QG)
     {
-        // This call will never return as it encapsulates an EventQueue's dispatch_forever() method.
+        // This call will never return--barring exceptions---as it encapsulates an infinite loop.
         g_pLEDLightControlManager->Setup<TransportScheme_t::CELLULAR_4G_LTE, TransportSocket_t::TCP>();
     }
     else if (g_MCUTarget == MCUTarget_t::NUCLEO_F767ZI)
     {
-        // This call will never return as it encapsulates an EventQueue's dispatch_forever() method.
+        // This call will never return--barring exceptions---as it encapsulates an infinite loop.
         g_pLEDLightControlManager->Setup<TransportScheme_t::ETHERNET, TransportSocket_t::TCP>();
     }
     
@@ -83,6 +83,5 @@ int main()
     // following statement will never be reached, as indeed we do not want it to. 
     delete g_pLEDLightControlManager;
     
-    // As per design, we will NEVER get to this statement. Great! Helps with debug...
     printf("\r\n\r\nNuertey-Dragonfly-Cellular-LightControl Application - Exiting.\r\n\r\n");
 }

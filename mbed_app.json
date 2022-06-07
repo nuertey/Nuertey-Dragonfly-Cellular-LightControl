@@ -23,6 +23,7 @@
         "*": {
             "platform.stdio-baud-rate": 9600,
             "platform.stdio-convert-newlines": true,
+            "events.shared-dispatch-from-application": true,
             "mbed-trace.enable": 0
         }
     }

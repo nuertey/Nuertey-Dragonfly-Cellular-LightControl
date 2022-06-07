@@ -21,7 +21,8 @@
     "target_overrides": {
         "*": {
             "target.network-default-interface-type": "CELLULAR",
-            "mbed-trace.enable": true,
+            "events.shared-dispatch-from-application": true,
+            "mbed-trace.enable": false,
             "lwip.ipv4-enabled": true,
             "ppp.ipv4-enabled": true,
             "lwip.ipv6-enabled": true,

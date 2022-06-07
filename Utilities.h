@@ -71,15 +71,17 @@ static ErrorCodesMap_t gs_ErrorCodesMap = make_error_codes_map();
 inline std::string ToString(const nsapi_error_t & key)
 {
     std::string result;
-    
-    if (key > 0)
+
+    // Prevent the possibility of std::out_of_range exception if the container
+    // does not have an error element with the specified key.
+    auto iter = gs_ErrorCodesMap.find(key);     
+    if (iter != gs_ErrorCodesMap.end())
     {
-        result = std::string("\"Warning! Code does not indicate an error and consequently does not exist in gs_ErrorCodesMap!\"");
+        result = iter->second;
     }
     else
     {
-        // std::out_of_range exception if the container does not have an element with the specified key. 
-        result = gs_ErrorCodesMap.at(key);
+        result = std::string("\"Warning! Code does not indicate an error and consequently does not exist in gs_ErrorCodesMap!\"");
     }
     
     return result;

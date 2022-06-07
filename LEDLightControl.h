@@ -103,16 +103,16 @@ PlatformMutex g_STDIOMutex;
 
 // OPTION 1: (DO NOT USE THIS OPTION AS YOU WILL EXHAUST THE STACK AND CRASH!!!)
 //
-// Use static EventQueue to prevent your program from failing due to 
+// "Use static EventQueue to prevent your program from failing due to 
 // queue memory exhaustion or to prevent dynamic memory allocation. Note
-// that it will only accept user allocated events.
+// that it will only accept user allocated events."
 //static EventQueue g_SharedEventQueue(0); // Definitely created on the stack!
 
 // OPTION 2:
 //
-// To further save RAM, if you have no other work to do in your main 
+// "To further save RAM, if you have no other work to do in your main 
 // function after initialization, you can dispatch the global event queue
-// from there, avoiding the need to create a separate dispatch thread.
+// from there, avoiding the need to create a separate dispatch thread."
 EventQueue *g_pSharedEventQueue = mbed_event_queue(); // Request a shared EventQueue, and definitely on the heap!
 
 // Forward declarations:
@@ -130,7 +130,7 @@ class LEDLightControl
     static constexpr int32_t BLOCKING_SOCKET_TIMEOUT_MILLISECONDS{60000};
     static constexpr uint8_t MASTER_LIGHT_CONTROL_GROUP{0};
     static constexpr uint8_t     MY_LIGHT_CONTROL_GROUP{1};
-    static constexpr uint32_t STANDARD_BUFFER_SIZE{1024}; // 1K ought to cover all our cases.
+    static constexpr uint32_t STANDARD_BUFFER_SIZE{40}; // 1K ought to cover all our cases.
     
 public:
     LEDLightControl();
@@ -156,7 +156,7 @@ protected:
     [[nodiscard]] bool Send();
     [[nodiscard]] bool Receive();
     
-    void ParseAndConsumeLightControlMessage(std::string& s, const std::string& delimiter);
+    bool ParseAndConsumeLightControlMessage(std::string& s, const std::string& delimiter);
     
 private:
     TransportScheme_t          m_TheTransportSchemeType;
@@ -195,7 +195,7 @@ LEDLightControl::~LEDLightControl()
         [[maybe_unused]] auto unused_return_1 = m_pTheSocket->close();
         delete m_pTheSocket;
         
-        // Per issues discussed in the link below, proactively ensuring
+        // Per issues discussed in MbedOS forums, proactively ensuring
         // that I don't run into any issues with MbedOS.  
         m_pTheSocket = nullptr; 
     }
@@ -293,8 +293,7 @@ void LEDLightControl::Setup()
     // virtual void cellular_callback(nsapi_event_t ev, intptr_t ptr, CellularContext *ctx = NULL);
     
     // TBD Nuertey Odzeyem; remove all superfluous comments and clean up
-    // the implementation once class is tested and proven to be working
-    // like the below:
+    // the implementation once class is tested and proven to be working.
     
     ConnectToNetworkInterface<transport, socket>();
 }
@@ -477,9 +476,6 @@ void LEDLightControl::ConnectToSocket()
         }
     }
     
-    // TBD Nuertey Odzeyem; to debug my Ubuntu Ethernet port since it is 
-    // having issues, do not send or receive for now on the socket. Just
-    // establish the connection so that I can query it on the Ubuntu peer.
     Run();
 }
 
@@ -513,7 +509,7 @@ void LEDLightControl::Run()
 
 bool LEDLightControl::Send()
 {    
-    printf("Running LEDLightControl::Send() ... \r\n");
+    //printf("Running LEDLightControl::Send() ... \r\n");
     
     auto result = false;
     char rawBuffer[STANDARD_BUFFER_SIZE];
@@ -536,45 +532,20 @@ bool LEDLightControl::Send()
                                   sizeof(rawBuffer), 
                                   "t:lights;g:%03d;s:%s;", 
                                   MY_LIGHT_CONTROL_GROUP, 
-                                  (g_UserLEDState ? "1" : "0")) + 1; // Ensure to account for terminating NUL.
+                                  (g_UserLEDState ? "1" : "0")) + 1;
     
-    printf("About to MBED_ASSERT on lengthWritten. lengthWritten = %d\n%s\r\n", lengthWritten, rawBuffer);
-
     MBED_ASSERT(lengthWritten > 0);
+    MBED_ASSERT(lengthWritten < sizeof(rawBuffer));
     
-    if (m_TheTransportSocketType == TransportSocket_t::TCP)
-    {
-        // Testing and debugging code:
-        //char sbuffer[] = "GET / HTTP/1.1\r\nHost: ifconfig.io\r\n\r\n";
-        //int scount = socket.send(sbuffer, sizeof sbuffer);
-        //printf("sent %d [%.*s]\n", scount, strstr(sbuffer, "\r\n") - sbuffer, sbuffer);
-        // End testing and debugging code.
+    //printf("After MBED_ASSERT on lengthWritten. lengthWritten = %d\n%s\r\n", lengthWritten, rawBuffer);
+
+    if (m_TheTransportSocketType != TransportSocket_t::UDP)
+    {        
+        nsapi_size_or_error_t rc = m_pTheSocket->send(rawBuffer, lengthWritten);
         
-        printf("About to TCPSocket->send(rawBuffer, lengthWritten) ... \r\n");
-        //nsapi_error_t rc = dynamic_cast<TCPSocket *>(m_pTheSocket)->send(sbuffer, sizeof sbuffer);
-        nsapi_error_t rc = dynamic_cast<TCPSocket *>(m_pTheSocket)->send(rawBuffer, lengthWritten);
-        printf("After TCPSocket->send(rawBuffer, lengthWritten). rc = [%d] \r\n", rc);
-        
-        if (rc != NSAPI_ERROR_OK)
+        if (rc < 0)
         {
-            printf("Error! TCPSocket->send() to EchoServer returned:\
-                [%d] -> %s\n", rc, ToString(rc).c_str());
-        }
-        else
-        {
-            result = true;
-            printf("Here ... \r\n");
-        }
-    }
-    else if (m_TheTransportSocketType == TransportSocket_t::CELLULAR_NON_IP)
-    {
-        printf("About to CellularNonIPSocket->send(rawBuffer, lengthWritten) ... \r\n");
-        nsapi_error_t rc = dynamic_cast<CellularNonIPSocket *>(m_pTheSocket)->send(rawBuffer, lengthWritten);
-        printf("After CellularNonIPSocket->send(rawBuffer, lengthWritten) ... \r\n");
-        
-        if (rc != NSAPI_ERROR_OK)
-        {
-            printf("Error! CellularNonIPSocket->send() to EchoServer returned:\
+            printf("Error! Connection-oriented Socket->send() to EchoServer returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
         }
         else
@@ -584,11 +555,9 @@ bool LEDLightControl::Send()
     }
     else
     {
-        printf("About to UDPSocket->sendto() ... \r\n");
-        nsapi_error_t rc = dynamic_cast<UDPSocket *>(m_pTheSocket)->sendto(m_TheSocketAddress, rawBuffer, lengthWritten);
-        printf("After UDPSocket->sendto() ... \r\n");
+        nsapi_size_or_error_t rc = dynamic_cast<UDPSocket *>(m_pTheSocket)->sendto(m_TheSocketAddress, rawBuffer, lengthWritten);
         
-        if (rc != NSAPI_ERROR_OK)
+        if (rc < 0)
         {
             printf("Error! UDPSocket->sendto() to EchoServer returned:\
                 [%d] -> %s\n", rc, ToString(rc).c_str());
@@ -599,13 +568,12 @@ bool LEDLightControl::Send()
         }
     }
     
-    printf("There ... \r\n");
     return result;
 }
 
 bool LEDLightControl::Receive()
 {
-    printf("Running LEDLightControl::Receive() ... \r\n");
+    //printf("Running LEDLightControl::Receive() ... \r\n");
     
     auto result = false;
     char receiveBuffer[STANDARD_BUFFER_SIZE];
@@ -626,8 +594,11 @@ bool LEDLightControl::Receive()
                         
             std::string s(receiveBuffer, rc);
             std::string delimiter = ";";
+            
+            printf("Success! m_pTheSocket->recv() returned:\
+                [%d] -> %s\n", rc, s.c_str());
                         
-            ParseAndConsumeLightControlMessage(s, delimiter);
+            result = ParseAndConsumeLightControlMessage(s, delimiter);
         }
         else if (rc < 0)
         {
@@ -643,7 +614,7 @@ bool LEDLightControl::Receive()
     }
     else
     {
-        nsapi_size_or_error_t rc = m_pTheSocket->recvfrom(&m_TheSocketAddress, 
+        nsapi_size_or_error_t rc = dynamic_cast<UDPSocket *>(m_pTheSocket)->recvfrom(&m_TheSocketAddress, 
                                                         receiveBuffer, 
                                                         sizeof(receiveBuffer) - 1);
         
@@ -656,7 +627,10 @@ bool LEDLightControl::Receive()
             std::string s(receiveBuffer, rc);
             std::string delimiter = ";";
                         
-            ParseAndConsumeLightControlMessage(s, delimiter);
+            printf("Success! m_pTheSocket->recvfrom() returned:\
+                [%d] -> %s\n", rc, s.c_str());
+                        
+            result = ParseAndConsumeLightControlMessage(s, delimiter);
         }
         else if (rc < 0)
         {
@@ -674,11 +648,12 @@ bool LEDLightControl::Receive()
     return result;
 }
 
-void LEDLightControl::ParseAndConsumeLightControlMessage(std::string& s, 
+bool LEDLightControl::ParseAndConsumeLightControlMessage(std::string& s, 
                                            const std::string& delimiter)
 {    
-    printf("Running LEDLightControl::ParseAndConsumeLightControlMessage() ... \r\n");
+    //printf("Running LEDLightControl::ParseAndConsumeLightControlMessage() ... \r\n");
     
+    auto result = true;
     size_t pos = 0;
     std::string token;
     if ((pos = s.find(delimiter)) != std::string::npos)
@@ -700,47 +675,57 @@ void LEDLightControl::ParseAndConsumeLightControlMessage(std::string& s,
                         token = s.substr(0, pos);
                         if (!token.compare("s:0"))
                         {
+                            printf("Successfully parsed LightControl message. Turning LED OFF ... \r\n");
                             g_UserLED = LED_OFF;
                         }
                         else if (!token.compare("s:1"))
                         {
+                            printf("Successfully parsed LightControl message. Turning LED ON ... \r\n");
                             g_UserLED = LED_ON;
                         }
                         else
                         {
                             printf("Error! \"s:<1|0>\" comparison failed. \
                                 We rather parsed: \"%s\"\r\n", token.c_str());
+                            result = false;
                         }
                     }
                     else
                     {
                         printf("Error! 3rd occurrence of LightControl \
                             message delimiter parsing failed.\r\n");
+                        result = false;
                     }
                 }
                 else
                 {
                     printf("Error! \"g:001\" comparison failed. \
                         We rather parsed: \"%s\"\r\n", token.c_str());
+                    result = false;
                 }
             }
             else
             {
                 printf("Error! 2nd occurrence of LightControl \
                     message delimiter parsing failed.\r\n");
+                result = false;
             }
         }
         else
         {
             printf("Error! \"t:lights\" comparison failed. \
                 We rather parsed: \"%s\"\r\n", token.c_str());
+            result = false;
         }
     }
     else
     {
         printf("Error! 1st occurrence of LightControl \
             message delimiter parsing failed.\r\n");
+        result = false;
     }
+    
+    return result;
 }
 
 // Create a user allocated event to be later bound:

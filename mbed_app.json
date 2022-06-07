@@ -1,13 +1,9 @@
-{
-    "macros": ["MBED_SYS_STATS_ENABLED=0", 
-               "MBED_HEAP_STATS_ENABLED=0"
-           ],
-    
+{    
     "config": {
-        "sock-type": "NUERTEY_TCP",
+        "sock-type": "TCP",
         "echo-server-hostname": {
             "help": "Echo server host name.",
-            "value": "\"10.42.0.1\""
+            "value": "\"echo.mbedcloudtesting.com\""
         },
         "echo-server-port": {
             "help": "Echo server port number.",
@@ -27,17 +23,7 @@
         "*": {
             "platform.stdio-baud-rate": 9600,
             "platform.stdio-convert-newlines": true,
-            "platform.error-filename-capture-enabled": 1,
-            "platform.error-all-threads-info": false,
-            "platform.error-hist-enabled": 1,
-            "platform.error-hist-size": 10,
-            "platform.stack-dump-enabled": true,
-            "mbed-trace.enable": 1,
-            "lwip.use-mbed-trace": 1,
-            "lwip.ipv4-enabled": true,
-            "lwip.ethernet-enabled": true,
-            "lwip.tcp-enabled": true,
-            "events.shared-dispatch-from-application": true
+            "mbed-trace.enable": 0
         }
     }
 }

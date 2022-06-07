@@ -1,0 +1,8 @@
+probes:
+  0672FF535155878281161542: # Probe's unique ID.
+    target_override:  stm32f767zi
+    test_binary:      Nuertey-Dragonfly-Cellular-LightControl.bin
+
+# Global options
+auto_unlock: false
+frequency: 8000000 # Set 8 MHz SWD default for all probes

@@ -157,8 +157,10 @@ namespace Utilities
                 {
                     printf("Error! On DNS lookup, Network returned: [%d] -> %s\n", retVal, ToString(retVal).c_str());
                 }
-
-                ipAddress = pTheSocketAddress->get_ip_address();
+                else
+                {
+                    ipAddress = pTheSocketAddress->get_ip_address();
+                }
             }
             else
             {

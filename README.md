@@ -2,6 +2,13 @@
 
 ARM Mbed application that blinks LED1 (D3, PA_0) on MultiTech Dragonfly™ Nano development board by sending and receiving 4G LTE Cellular LightControl messages.
 
+## Nuertey-Dragonfly-Cellular-LightControl UML Class Diagram - nuertey-synchronous-operation branch (i.e. Synchronous Design Version)
+
+![Nuertey-Dragonfly-Cellular-LightControl Class Diagram](https://github.com/nuertey/RandomArtifacts/blob/master/Nuertey-Dragonfly-Cellular-LightControl_synchronous.png?raw=true)
+
+## Nuertey-Dragonfly-Cellular-LightControl UML Sequence Diagram - nuertey-synchronous-operation branch (i.e. Synchronous Design Version)
+
+<placeholder>
 
 ## DEPENDENCIES - CODING LANGUAGE/OS/COMPILATION TARGET/COMPILER:
   - C++20

@@ -8,7 +8,9 @@ ARM Mbed application that blinks LED1 (D3, PA_0) on MultiTech Dragonfly™ Nano 
 
 ## Nuertey-Dragonfly-Cellular-LightControl UML Sequence Diagram - main branch (i.e. Asynchronous Design Version)
 
-<placeholder>
+Note to click on diagram and enlarge to observe the sequence details better.
+
+![Nuertey-Dragonfly-Cellular-LightControl Sequence Diagram](https://github.com/nuertey/RandomArtifacts/blob/master/Nuertey-Dragonfly-Cellular-LightControl_asynchronous_sequence_diagram.png?raw=true)
 
 ## DEPENDENCIES - CODING LANGUAGE/OS/COMPILATION TARGET/COMPILER:
   - C++20

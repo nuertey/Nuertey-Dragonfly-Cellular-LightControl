@@ -322,6 +322,11 @@ void LEDLightControl::ConnectToSocket()
     //
     // Initially all sockets have unbounded timeouts. NSAPI_ERROR_WOULD_BLOCK
     // is returned if a blocking operation takes longer than the specified timeout.
+    //
+    // Also, extrapolate from the following rule:
+    //
+    // "If using network sockets as streams, a timeout should be set to 
+    //  stop denial of service attacks."
     m_TheSocket.set_blocking(true);
     m_TheSocket.set_timeout(BLOCKING_SOCKET_TIMEOUT_MILLISECONDS);
     

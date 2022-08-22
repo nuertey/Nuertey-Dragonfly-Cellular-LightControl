@@ -113,7 +113,7 @@ PlatformMutex g_STDIOMutex;
 // "To further save RAM, if you have no other work to do in your main 
 // function after initialization, you can dispatch the global event queue
 // from there, avoiding the need to create a separate dispatch thread."
-EventQueue *g_pSharedEventQueue = mbed_event_queue(); // Request a shared EventQueue, and definitely on the heap!
+EventQueue *g_pSharedEventQueue = mbed_event_queue(); // Request a shared EventQueue, and on the main thread stack!
 
 // Forward declarations:
 class LEDLightControl;
